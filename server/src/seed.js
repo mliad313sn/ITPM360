@@ -221,6 +221,20 @@ async function seed() {
   await query(`UPDATE tasks SET percent_complete = 82 WHERE title = 'Schema harmonization for sales data'`);
   await query(`UPDATE tasks SET percent_complete = 55 WHERE title = 'Finance module pilot migration'`);
 
+  // WBS: nest a couple of subtasks under the finance migration task
+  await query(
+    `INSERT INTO tasks (project_id, parent_task_id, title, status, priority, percent_complete, estimate_hours, sort_order, created_by)
+     SELECT project_id, id, 'Map chart of accounts', 'done', 'high', 100, 24, 20, $1
+     FROM tasks WHERE title = 'Finance module pilot migration' LIMIT 1`,
+    [users['admin@itpm360.dev']]
+  );
+  await query(
+    `INSERT INTO tasks (project_id, parent_task_id, title, status, priority, percent_complete, estimate_hours, sort_order, created_by)
+     SELECT project_id, id, 'Reconcile Q2 trial balance', 'in_progress', 'critical', 40, 40, 21, $1
+     FROM tasks WHERE title = 'Finance module pilot migration' LIMIT 1`,
+    [users['admin@itpm360.dev']]
+  );
+
   // PM extras: milestones, estimates, one dependency chain and a comment
   await query(`UPDATE tasks SET is_milestone = true, estimate_hours = 16
                WHERE title = 'Cutover runbook and rollback plan'`);

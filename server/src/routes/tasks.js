@@ -13,6 +13,7 @@ const PRIORITIES = ['low', 'medium', 'high', 'critical'];
 const TASK_SELECT = `
   SELECT t.*,
          u.full_name AS assignee_name,
+         (SELECT count(*)::int FROM tasks c WHERE c.parent_task_id = t.id) AS subtask_count,
          COALESCE((SELECT sum(e.hours) FROM time_entries e WHERE e.task_id = t.id), 0)::float AS logged_hours,
          COALESCE((SELECT json_agg(json_build_object('id', d.depends_on_task_id, 'title', dt.title, 'status', dt.status))
            FROM task_dependencies d JOIN tasks dt ON dt.id = d.depends_on_task_id
@@ -31,6 +32,29 @@ const clampPercent = (v) => {
   const n = Math.round(Number(v));
   return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 0;
 };
+
+// Validate a proposed parent for a task: must exist in the same project, not be
+// the task itself, and not be a descendant of it (which would form a cycle).
+// Returns { ok, error }.
+async function validateParent(parentId, projectId, selfId) {
+  if (!parentId) return { ok: true, value: null };
+  if (parentId === selfId) return { ok: false, error: 'A task cannot be its own parent' };
+  const { rows } = await query('SELECT project_id FROM tasks WHERE id = $1', [parentId]);
+  if (!rows[0]) return { ok: false, error: 'Unknown parent task' };
+  if (rows[0].project_id !== projectId) return { ok: false, error: 'Parent task must be in the same project' };
+  if (selfId) {
+    const { rows: cyc } = await query(
+      `WITH RECURSIVE ancestors AS (
+         SELECT parent_task_id FROM tasks WHERE id = $1
+         UNION
+         SELECT t.parent_task_id FROM tasks t JOIN ancestors a ON t.id = a.parent_task_id
+       ) SELECT 1 FROM ancestors WHERE parent_task_id = $2 LIMIT 1`,
+      [parentId, selfId]
+    );
+    if (cyc.length) return { ok: false, error: 'That parent would create a cycle' };
+  }
+  return { ok: true, value: parentId };
+}
 
 async function onTaskBlocked(project, task, actorId) {
   await notifyUsers(
@@ -84,15 +108,17 @@ router.post('/projects/:projectId/tasks', async (req, res) => {
   if (status === 'blocked' && !b.blocker_explanation?.trim()) {
     return res.status(400).json({ error: 'A blocked task requires a blocker explanation' });
   }
+  const parent = await validateParent(b.parent_task_id, req.params.projectId, null);
+  if (!parent.ok) return res.status(400).json({ error: parent.error });
 
   try {
     const { rows } = await query(
       `INSERT INTO tasks (project_id, title, description, assignee_id, status, priority,
                           start_date, due_date, blocker_explanation, next_steps, sort_order, created_by,
-                          completed_at, is_milestone, estimate_hours, tags, percent_complete)
+                          completed_at, is_milestone, estimate_hours, tags, percent_complete, parent_task_id)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
                COALESCE((SELECT max(sort_order) + 1 FROM tasks WHERE project_id = $1), 0),
-               $11, $12, $13, $14, $15, $16)
+               $11, $12, $13, $14, $15, $16, $17)
        RETURNING id`,
       [
         req.params.projectId, b.title.trim(), b.description?.trim() || null, b.assignee_id || null,
@@ -101,7 +127,7 @@ router.post('/projects/:projectId/tasks', async (req, res) => {
         b.blocker_explanation?.trim() || null, b.next_steps?.trim() || null,
         req.user.id, status === 'done' ? new Date() : null,
         b.is_milestone === true, b.estimate_hours ?? null, normalizeTags(b.tags) ?? [],
-        status === 'done' ? 100 : clampPercent(b.percent_complete),
+        status === 'done' ? 100 : clampPercent(b.percent_complete), parent.value,
       ]
     );
     await logAudit(req, 'create', 'task', rows[0].id, { after: { title: b.title, project_id: req.params.projectId } });
@@ -151,6 +177,13 @@ router.patch('/tasks/:id', async (req, res) => {
   if (next.status === 'blocked' && !next.blocker_explanation) {
     return res.status(400).json({ error: 'A blocked task requires a blocker explanation' });
   }
+  if (b.parent_task_id !== undefined) {
+    const parent = await validateParent(b.parent_task_id, existing.project_id, req.params.id);
+    if (!parent.ok) return res.status(400).json({ error: parent.error });
+    next.parent_task_id = parent.value;
+  } else {
+    next.parent_task_id = existing.parent_task_id;
+  }
   const completed_at =
     next.status === 'done' ? existing.completed_at ?? new Date() : null;
 
@@ -158,12 +191,14 @@ router.patch('/tasks/:id', async (req, res) => {
     await query(
       `UPDATE tasks SET title=$1, description=$2, assignee_id=$3, status=$4, priority=$5,
               start_date=$6, due_date=$7, blocker_explanation=$8, next_steps=$9, sort_order=$10,
-              completed_at=$11, is_milestone=$12, estimate_hours=$13, tags=$14, percent_complete=$15
-       WHERE id = $16`,
+              completed_at=$11, is_milestone=$12, estimate_hours=$13, tags=$14, percent_complete=$15,
+              parent_task_id=$16
+       WHERE id = $17`,
       [
         next.title, next.description, next.assignee_id, next.status, next.priority,
         next.start_date, next.due_date, next.blocker_explanation, next.next_steps, next.sort_order,
-        completed_at, next.is_milestone, next.estimate_hours, next.tags, next.percent_complete, req.params.id,
+        completed_at, next.is_milestone, next.estimate_hours, next.tags, next.percent_complete,
+        next.parent_task_id, req.params.id,
       ]
     );
   } catch (err) {

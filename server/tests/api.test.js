@@ -243,6 +243,30 @@ test('EVM: project exposes earned-value metrics and portfolio rollup', async () 
   assert.equal(done.body.task.percent_complete, 100);
 });
 
+test('WBS: subtasks nest and reparenting rejects cycles', async () => {
+  const parent = await request(app).post(`/api/projects/${projectId}/tasks`).set(auth(pmToken))
+    .send({ title: 'WBS parent' });
+  const child = await request(app).post(`/api/projects/${projectId}/tasks`).set(auth(pmToken))
+    .send({ title: 'WBS child', parent_task_id: parent.body.task.id });
+  assert.equal(child.status, 201);
+  assert.equal(child.body.task.parent_task_id, parent.body.task.id);
+
+  // parent now reports a subtask
+  const list = await request(app).get(`/api/projects/${projectId}/tasks`).set(auth(pmToken));
+  const p = list.body.tasks.find((t) => t.id === parent.body.task.id);
+  assert.equal(p.subtask_count, 1);
+
+  // making the parent a child of its own descendant is a cycle → 400
+  const cycle = await request(app).patch(`/api/tasks/${parent.body.task.id}`).set(auth(pmToken))
+    .send({ parent_task_id: child.body.task.id });
+  assert.equal(cycle.status, 400);
+
+  // a task cannot be its own parent
+  const self = await request(app).patch(`/api/tasks/${parent.body.task.id}`).set(auth(pmToken))
+    .send({ parent_task_id: parent.body.task.id });
+  assert.equal(self.status, 400);
+});
+
 test('stakeholders and RACI matrix CRUD with RBAC', async () => {
   const sh = await request(app).post(`/api/projects/${projectId}/stakeholders`).set(auth(pmToken))
     .send({ name: 'CFO', title: 'Finance', influence: 3, interest: 3, engagement: 'Manage closely' });

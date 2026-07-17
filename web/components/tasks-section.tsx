@@ -12,7 +12,7 @@ import { GanttChart } from '@/components/gantt';
 const emptyForm = {
   title: '', description: '', assignee_id: '', status: 'todo' as TaskStatus,
   priority: 'medium' as TaskPriority, start_date: '', due_date: '', blocker_explanation: '', next_steps: '',
-  is_milestone: false, estimate_hours: '', tags: '', percent_complete: 0,
+  is_milestone: false, estimate_hours: '', tags: '', percent_complete: 0, parent_task_id: '',
 };
 
 // Log-time widget shown when editing an existing task
@@ -272,10 +272,17 @@ export function TasksSection({
             estimate_hours: t.estimate_hours ? String(Number(t.estimate_hours)) : '',
             tags: t.tags.join(', '),
             percent_complete: t.percent_complete,
+            parent_task_id: t.parent_task_id ?? '',
           }
     );
     setError(null);
     setEditing(t);
+  }
+
+  function openSubtask(parentId: string) {
+    setForm({ ...emptyForm, parent_task_id: parentId });
+    setError(null);
+    setEditing('new');
   }
 
   async function save(e: React.FormEvent) {
@@ -296,6 +303,7 @@ export function TasksSection({
       next_steps: form.next_steps || null,
       estimate_hours: form.estimate_hours === '' ? null : Number(form.estimate_hours),
       tags: form.tags.split(',').map((t) => t.trim()).filter(Boolean),
+      parent_task_id: form.parent_task_id || null,
     });
     try {
       if (editing === 'new') {
@@ -342,6 +350,100 @@ export function TasksSection({
     { key: 'timeline', label: 'Timeline' },
   ] as const;
 
+  // WBS tree: render top-level tasks then their subtasks, indented.
+  const childrenByParent = new Map<string | null, Task[]>();
+  for (const t of tasks) {
+    const key = t.parent_task_id ?? null;
+    childrenByParent.set(key, [...(childrenByParent.get(key) ?? []), t]);
+  }
+
+  function renderRow(t: Task, depth: number): React.ReactNode {
+    const kids = childrenByParent.get(t.id) ?? [];
+    return (
+      <div key={t.id}>
+        <div className="group flex items-start justify-between gap-4 py-3" style={{ paddingLeft: depth * 20 }}>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              {depth > 0 && <span className="text-slate-300">↳</span>}
+              <button
+                onClick={() => canEdit && open(t)}
+                className={cx('font-medium text-slate-900 text-left', canEdit && 'hover:text-indigo-600')}
+              >
+                {t.is_milestone && <span className="mr-1 text-indigo-500" title="Milestone">◆</span>}
+                {t.title}
+              </button>
+              <TaskStatusBadge status={t.status} />
+              <PriorityLabel priority={t.priority} />
+              {t.subtask_count > 0 && (
+                <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                  {t.subtask_count} sub
+                </span>
+              )}
+            </div>
+            <p className="mt-0.5 text-xs text-slate-500">
+              {t.assignee_name ?? 'Unassigned'} · {formatDate(t.start_date)} →{' '}
+              <span className={cx(isOverdue(t) && 'font-semibold text-rose-600')}>{formatDate(t.due_date)}</span>
+              {(t.logged_hours > 0 || t.estimate_hours) && (
+                <>
+                  {' · '}
+                  <span className={cx(t.estimate_hours && t.logged_hours > Number(t.estimate_hours) && 'font-semibold text-rose-600')}>
+                    {t.logged_hours}h{t.estimate_hours ? ` / ${Number(t.estimate_hours)}h` : ' logged'}
+                  </span>
+                </>
+              )}
+              {t.dependencies.length > 0 && (
+                <span className="ml-1 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                  {t.dependencies.length} dep{t.dependencies.length > 1 ? 's' : ''}
+                </span>
+              )}
+            </p>
+            {t.tags.length > 0 && (
+              <div className="mt-1 flex flex-wrap gap-1">
+                {t.tags.map((tag) => (
+                  <span key={tag} className="rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-600">#{tag}</span>
+                ))}
+              </div>
+            )}
+            {t.percent_complete > 0 && t.status !== 'done' && (
+              <div className="mt-1.5 flex items-center gap-2">
+                <div className="h-1 w-32 overflow-hidden rounded-full bg-slate-100">
+                  <div className="h-full rounded-full bg-indigo-500" style={{ width: `${t.percent_complete}%` }} />
+                </div>
+                <span className="text-[10px] tabular-nums text-slate-400">{t.percent_complete}%</span>
+              </div>
+            )}
+            {t.status === 'blocked' && t.blocker_explanation && (
+              <p className="mt-1.5 rounded-lg bg-rose-50 px-3 py-1.5 text-xs text-rose-700">
+                <span className="font-semibold">Blocker:</span> {t.blocker_explanation}
+              </p>
+            )}
+            {t.next_steps && t.status !== 'done' && (
+              <p className="mt-1.5 rounded-lg bg-slate-50 px-3 py-1.5 text-xs text-slate-600">
+                <span className="font-semibold">Next steps:</span> {t.next_steps}
+              </p>
+            )}
+          </div>
+          {canEdit && (
+            <div className="flex shrink-0 items-center gap-2">
+              {depth < 3 && (
+                <button onClick={() => openSubtask(t.id)} className="invisible text-xs text-indigo-500 hover:text-indigo-700 group-hover:visible">
+                  + Sub
+                </button>
+              )}
+              <button onClick={() => remove(t)} className="invisible text-xs text-slate-400 hover:text-rose-500 group-hover:visible">
+                Delete
+              </button>
+            </div>
+          )}
+        </div>
+        {kids.map((k) => renderRow(k, depth + 1))}
+      </div>
+    );
+  }
+
+  const renderTree = (parentId: string | null, depth: number) =>
+    (childrenByParent.get(parentId) ?? []).map((t) => renderRow(t, depth));
+
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-5">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -375,77 +477,7 @@ export function TasksSection({
         <GanttChart tasks={tasks} />
       ) : (
         <div className="divide-y divide-slate-100">
-          {tasks.map((t) => (
-            <div key={t.id} className="group flex items-start justify-between gap-4 py-3">
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    onClick={() => canEdit && open(t)}
-                    className={cx('font-medium text-slate-900 text-left', canEdit && 'hover:text-indigo-600')}
-                  >
-                    {t.is_milestone && <span className="mr-1 text-indigo-500" title="Milestone">◆</span>}
-                    {t.title}
-                  </button>
-                  <TaskStatusBadge status={t.status} />
-                  <PriorityLabel priority={t.priority} />
-                </div>
-                <p className="mt-0.5 text-xs text-slate-500">
-                  {t.assignee_name ?? 'Unassigned'} · {formatDate(t.start_date)} →{' '}
-                  <span className={cx(isOverdue(t) && 'font-semibold text-rose-600')}>{formatDate(t.due_date)}</span>
-                  {(t.logged_hours > 0 || t.estimate_hours) && (
-                    <>
-                      {' · '}
-                      <span className={cx(
-                        t.estimate_hours && t.logged_hours > Number(t.estimate_hours) && 'font-semibold text-rose-600'
-                      )}>
-                        {t.logged_hours}h{t.estimate_hours ? ` / ${Number(t.estimate_hours)}h` : ' logged'}
-                      </span>
-                    </>
-                  )}
-                  {t.dependencies.length > 0 && (
-                    <span className="ml-1 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
-                      {t.dependencies.length} dep{t.dependencies.length > 1 ? 's' : ''}
-                    </span>
-                  )}
-                </p>
-                {t.tags.length > 0 && (
-                  <div className="mt-1 flex flex-wrap gap-1">
-                    {t.tags.map((tag) => (
-                      <span key={tag} className="rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-600">
-                        #{tag}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                {t.percent_complete > 0 && t.status !== 'done' && (
-                  <div className="mt-1.5 flex items-center gap-2">
-                    <div className="h-1 w-32 overflow-hidden rounded-full bg-slate-100">
-                      <div className="h-full rounded-full bg-indigo-500" style={{ width: `${t.percent_complete}%` }} />
-                    </div>
-                    <span className="text-[10px] tabular-nums text-slate-400">{t.percent_complete}%</span>
-                  </div>
-                )}
-                {t.status === 'blocked' && t.blocker_explanation && (
-                  <p className="mt-1.5 rounded-lg bg-rose-50 px-3 py-1.5 text-xs text-rose-700">
-                    <span className="font-semibold">Blocker:</span> {t.blocker_explanation}
-                  </p>
-                )}
-                {t.next_steps && t.status !== 'done' && (
-                  <p className="mt-1.5 rounded-lg bg-slate-50 px-3 py-1.5 text-xs text-slate-600">
-                    <span className="font-semibold">Next steps:</span> {t.next_steps}
-                  </p>
-                )}
-              </div>
-              {canEdit && (
-                <button
-                  onClick={() => remove(t)}
-                  className="invisible text-xs text-slate-400 hover:text-rose-500 group-hover:visible"
-                >
-                  Delete
-                </button>
-              )}
-            </div>
-          ))}
+          {renderTree(null, 0)}
         </div>
       )}
 
@@ -457,6 +489,16 @@ export function TasksSection({
             </Field>
             <Field label="Description">
               <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="min-h-16" />
+            </Field>
+            <Field label="Parent task (WBS)" hint="Nest this task under a parent to build a work breakdown structure">
+              <Select value={form.parent_task_id} onChange={(e) => setForm({ ...form, parent_task_id: e.target.value })}>
+                <option value="">— none (top level) —</option>
+                {tasks
+                  .filter((t) => editing === 'new' || t.id !== editing.id)
+                  .map((t) => (
+                    <option key={t.id} value={t.id}>{t.title}</option>
+                  ))}
+              </Select>
             </Field>
             <div className="grid gap-4 sm:grid-cols-3">
               <Field label="Assignee">

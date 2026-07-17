@@ -112,6 +112,8 @@ export interface Task {
   logged_hours: number;
   percent_complete: number;
   tags: string[];
+  parent_task_id: string | null;
+  subtask_count: number;
   dependencies: TaskDependency[];
   project_name?: string;
   branch_code?: string;
