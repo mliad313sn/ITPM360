@@ -75,6 +75,20 @@ export function KanbanBoard({
                     <span className="truncate text-xs text-slate-400">{t.assignee_name ?? 'Unassigned'}</span>
                     <PriorityLabel priority={t.priority} />
                   </div>
+                  {t.tags.length > 0 && (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {t.tags.slice(0, 3).map((tag) => (
+                        <span key={tag} className="rounded bg-indigo-50 px-1 py-0.5 text-[9px] font-medium text-indigo-600">
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {t.percent_complete > 0 && t.status !== 'done' && (
+                    <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-slate-100">
+                      <div className="h-full rounded-full bg-indigo-500" style={{ width: `${t.percent_complete}%` }} />
+                    </div>
+                  )}
                   {t.due_date && (
                     <p className="mt-1 text-xs text-slate-400">due {formatDate(t.due_date)}</p>
                   )}

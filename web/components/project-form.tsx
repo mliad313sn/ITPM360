@@ -28,6 +28,7 @@ export function ProjectFormModal({
     start_date: project?.start_date?.slice(0, 10) ?? '',
     end_date: project?.end_date?.slice(0, 10) ?? '',
     budget: project?.budget ?? '',
+    actual_cost: project?.actual_cost ?? '',
   });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -44,6 +45,7 @@ export function ProjectFormModal({
       start_date: form.start_date || null,
       end_date: form.end_date || null,
       budget: form.budget === '' ? null : Number(form.budget),
+      actual_cost: form.actual_cost === '' ? null : Number(form.actual_cost),
     });
     try {
       const data = project
@@ -109,20 +111,29 @@ export function ProjectFormModal({
             </Select>
           </Field>
         </div>
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Start date">
             <Input type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} />
           </Field>
           <Field label="End date">
             <Input type="date" value={form.end_date} onChange={(e) => setForm({ ...form, end_date: e.target.value })} />
           </Field>
-          <Field label="Budget">
+          <Field label="Budget (BAC)" hint="Budget at completion — drives earned-value metrics">
             <Input
               type="number"
               min="0"
               step="1000"
               value={form.budget ?? ''}
               onChange={(e) => setForm({ ...form, budget: e.target.value })}
+            />
+          </Field>
+          <Field label="Actual cost to date (AC)" hint="Spend so far — drives CPI and cost variance">
+            <Input
+              type="number"
+              min="0"
+              step="1000"
+              value={form.actual_cost ?? ''}
+              onChange={(e) => setForm({ ...form, actual_cost: e.target.value })}
             />
           </Field>
         </div>

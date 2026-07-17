@@ -67,6 +67,12 @@ This design lets one person be, e.g., Branch Manager in Germany and Viewer in Fr
 - **`notifications`** — per-user inbox: `type` (`task_blocked`, `rag_downgrade`, `deadline_approaching`, `task_assigned`, `meeting_scheduled`, `grc_checkpoint_due`), deep-link via `entity_type`/`entity_id`, partial index on unread.
 - **`webhook_subscriptions` / `webhook_deliveries`** — outbound integration: HMAC `secret`, subscribed `events` array, delivery log with response status and retry `attempts` (delivery engine lands in Phase 5; schema is defined up front so nothing needs re-migration).
 
+## Later migrations
+
+- **002** — `task_dependencies` (finish-to-start), `task_comments`, `tasks.is_milestone`, `tasks.estimate_hours`.
+- **003** — `risks` (RAID register: category, likelihood/impact/`severity` generated column, status, owner, mitigation), `time_entries` (hours logged per task/user/date), `tasks.tags` (gin-indexed), `notification_type += risk_raised`.
+- **004** — `projects.actual_cost` and `tasks.percent_complete` (EVM inputs; earned value is computed, not stored).
+
 ## Conventions
 
 - UUID primary keys (`gen_random_uuid()`) everywhere except append-only logs (`bigint` identity).

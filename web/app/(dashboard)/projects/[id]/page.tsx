@@ -9,10 +9,12 @@ import { useFeedback } from '@/components/feedback';
 import { ProjectFormModal } from '@/components/project-form';
 import { TasksSection } from '@/components/tasks-section';
 import { GrcSection } from '@/components/grc-section';
+import { RisksSection } from '@/components/risks-section';
 import { MeetingsSection } from '@/components/meetings-section';
+import { EvmPanel } from '@/components/evm';
 import {
   canManageBranch, canManageProject,
-  type Branch, type GrcCheckpoint, type Meeting, type Project, type Rag, type Task, type UserRow,
+  type Branch, type Evm, type GrcCheckpoint, type Meeting, type Project, type Rag, type Risk, type Task, type UserRow,
 } from '@/lib/types';
 import {
   Button, Field, Modal, RagBadge, Select, Input, Spinner, StatusBadge, ErrorNote,
@@ -31,10 +33,12 @@ export default function ProjectDetailPage() {
   const me = useMe();
   const { toast, confirm } = useFeedback();
   const [project, setProject] = useState<Project | null>(null);
+  const [evm, setEvm] = useState<Evm | null>(null);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [users, setUsers] = useState<UserRow[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [checkpoints, setCheckpoints] = useState<GrcCheckpoint[]>([]);
+  const [risks, setRisks] = useState<Risk[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [editing, setEditing] = useState(false);
   const [addingMember, setAddingMember] = useState(false);
@@ -45,11 +49,15 @@ export default function ProjectDetailPage() {
   const loadWork = () => {
     api<{ tasks: Task[] }>(`/projects/${id}/tasks`).then((d) => setTasks(d.tasks));
     api<{ checkpoints: GrcCheckpoint[] }>(`/projects/${id}/grc`).then((d) => setCheckpoints(d.checkpoints));
+    api<{ risks: Risk[] }>(`/projects/${id}/risks`).then((d) => setRisks(d.risks)).catch(() => {});
     api<{ meetings: Meeting[] }>(`/meetings?project_id=${id}`).then((d) => setMeetings(d.meetings));
   };
 
   const reloadProject = () =>
-    api<{ project: Project }>(`/projects/${id}`).then((d) => setProject(d.project));
+    api<{ project: Project; evm: Evm }>(`/projects/${id}`).then((d) => {
+      setProject(d.project);
+      setEvm(d.evm);
+    });
 
   useEffect(() => {
     reloadProject().catch(() => setNotFound(true));
@@ -214,12 +222,16 @@ export default function ProjectDetailPage() {
             }}
           />
 
+          <RisksSection project={project} risks={risks} users={users} canManage={canManage} onChanged={loadWork} />
+
           <GrcSection project={project} checkpoints={checkpoints} canManage={canManage} onChanged={loadWork} />
 
           <MeetingsSection project={project} meetings={meetings} users={users} canEdit={canContribute} onChanged={loadWork} />
         </div>
 
         <div className="space-y-6">
+          {evm && <EvmPanel evm={evm} />}
+
           <section className="rounded-xl border border-slate-200 bg-white p-5">
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">RAG status</h2>
             <div className="flex gap-2">

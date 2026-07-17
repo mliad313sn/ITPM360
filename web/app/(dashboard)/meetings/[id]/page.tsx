@@ -9,6 +9,7 @@ import type { Agenda, Meeting } from '@/lib/types';
 import { Button, RagBadge, Spinner, Textarea, cx, formatDate } from '@/components/ui';
 import { MeetingStatusBadge, formatDateTime } from '@/components/meetings-section';
 import { TaskStatusBadge } from '@/components/task-badges';
+import { severityBand } from '@/components/risks-section';
 
 export default function MeetingDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -198,7 +199,7 @@ export default function MeetingDetailPage() {
               {agenda.open_grc_checkpoints.length > 0 && (
                 <div>
                   <h3 className="mb-2 text-sm font-medium text-slate-700">
-                    {agenda.overdue_tasks.length > 0 ? '5' : '4'}. Open GRC checkpoints ({agenda.open_grc_checkpoints.length})
+                    {4 + (agenda.overdue_tasks.length > 0 ? 1 : 0)}. Open GRC checkpoints ({agenda.open_grc_checkpoints.length})
                   </h3>
                   <ul className="space-y-1.5">
                     {agenda.open_grc_checkpoints.map((g) => (
@@ -207,6 +208,32 @@ export default function MeetingDetailPage() {
                           <span className="uppercase text-xs text-slate-400">{g.checkpoint_type}</span> {g.title}
                         </span>
                         <span className="text-slate-500">{g.status.replace('_', ' ')} · due {formatDate(g.due_date)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {agenda.top_risks.length > 0 && (
+                <div>
+                  <h3 className="mb-2 text-sm font-medium text-slate-700">
+                    {4 + (agenda.overdue_tasks.length > 0 ? 1 : 0) + (agenda.open_grc_checkpoints.length > 0 ? 1 : 0)}. Top
+                    risks ({agenda.top_risks.length})
+                  </h3>
+                  <ul className="space-y-1.5">
+                    {agenda.top_risks.map((r) => (
+                      <li key={r.id} className="flex items-start justify-between gap-3 rounded-lg bg-slate-50 px-4 py-2 text-sm">
+                        <span className="min-w-0">
+                          <span className="font-medium text-slate-900">
+                            <span className="uppercase text-xs text-slate-400">{r.category}</span> {r.title}
+                          </span>
+                          {r.mitigation_plan && (
+                            <span className="block truncate text-xs text-slate-500">Mitigation: {r.mitigation_plan}</span>
+                          )}
+                        </span>
+                        <span className={cx('shrink-0 rounded-full px-2 py-0.5 text-xs font-bold', severityBand(r.severity).chip)}>
+                          sev {r.severity}
+                        </span>
                       </li>
                     ))}
                   </ul>

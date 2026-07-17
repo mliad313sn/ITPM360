@@ -1,9 +1,9 @@
 import { query } from '../db.js';
 
 // Build the live meeting agenda for a project: current RAG, blocked tasks
-// (with reasons), next steps, overdue tasks and open GRC checkpoints.
+// (with reasons), next steps, overdue tasks, open GRC checkpoints and top risks.
 export async function buildAgenda(projectId) {
-  const [{ rows: projectRows }, { rows: blocked }, { rows: nextSteps }, { rows: overdue }, { rows: grc }] =
+  const [{ rows: projectRows }, { rows: blocked }, { rows: nextSteps }, { rows: overdue }, { rows: grc }, { rows: risks }] =
     await Promise.all([
       query(`SELECT id, name, rag_status, status FROM projects WHERE id = $1`, [projectId]),
       query(
@@ -34,6 +34,15 @@ export async function buildAgenda(projectId) {
          ORDER BY due_date NULLS LAST`,
         [projectId]
       ),
+      query(
+        `SELECT r.id, r.title, r.category, r.severity, r.likelihood, r.impact, r.status,
+                r.mitigation_plan, u.full_name AS owner_name
+         FROM risks r LEFT JOIN users u ON u.id = r.owner_id
+         WHERE r.project_id = $1 AND r.status IN ('open', 'mitigating')
+         ORDER BY r.severity DESC, r.created_at
+         LIMIT 5`,
+        [projectId]
+      ),
     ]);
 
   const project = projectRows[0];
@@ -45,5 +54,6 @@ export async function buildAgenda(projectId) {
     next_steps: nextSteps,
     overdue_tasks: overdue,
     open_grc_checkpoints: grc,
+    top_risks: risks,
   };
 }

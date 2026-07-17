@@ -165,6 +165,84 @@ test('RAG downgrade notifies the PM and is audit-logged', async () => {
   assert.equal(entry.changes.after.rag_status, 'red');
 });
 
+test('risk register: severity scoring, high-risk notification, and RBAC', async () => {
+  // viewer (scoped to a different branch) has no visibility
+  const viewerView = await request(app).get(`/api/projects/${projectId}/risks`).set(auth(viewerToken));
+  assert.equal(viewerView.status, 403);
+
+  // a low-severity risk does not notify
+  const low = await request(app).post(`/api/projects/${projectId}/risks`).set(auth(pmToken))
+    .send({ title: 'Minor doc gap', likelihood: 1, impact: 2 });
+  assert.equal(low.status, 201);
+  assert.equal(low.body.risk.severity, 2);
+
+  // a high-severity risk notifies the admin/BM stakeholders
+  const high = await request(app).post(`/api/projects/${projectId}/risks`).set(auth(pmToken))
+    .send({ title: 'Vendor outage', category: 'risk', likelihood: 4, impact: 5 });
+  assert.equal(high.status, 201);
+  assert.equal(high.body.risk.severity, 20);
+
+  // list is severity-ordered, open risks first
+  const list = await request(app).get(`/api/projects/${projectId}/risks`).set(auth(pmToken));
+  assert.equal(list.body.risks[0].title, 'Vendor outage');
+
+  // out-of-range scores are clamped, not rejected
+  const clamped = await request(app).post(`/api/projects/${projectId}/risks`).set(auth(pmToken))
+    .send({ title: 'Weird scores', likelihood: 99, impact: 0 });
+  assert.equal(clamped.body.risk.likelihood, 3);
+  assert.equal(clamped.body.risk.impact, 3);
+});
+
+test('time tracking rolls actual hours onto the task', async () => {
+  const task = await request(app).post(`/api/projects/${projectId}/tasks`).set(auth(pmToken))
+    .send({ title: 'Timed work', estimate_hours: 10 });
+  const taskId = task.body.task.id;
+
+  const bad = await request(app).post(`/api/tasks/${taskId}/time`).set(auth(pmToken)).send({ hours: 0 });
+  assert.equal(bad.status, 400);
+
+  await request(app).post(`/api/tasks/${taskId}/time`).set(auth(pmToken)).send({ hours: 3.5 });
+  await request(app).post(`/api/tasks/${taskId}/time`).set(auth(pmToken)).send({ hours: 2 });
+
+  const time = await request(app).get(`/api/tasks/${taskId}/time`).set(auth(pmToken));
+  assert.equal(time.body.total_hours, 5.5);
+
+  const tasks = await request(app).get(`/api/projects/${projectId}/tasks`).set(auth(pmToken));
+  const timed = tasks.body.tasks.find((t) => t.id === taskId);
+  assert.equal(timed.logged_hours, 5.5);
+});
+
+test('task tags are normalized (lowercased, deduped, trimmed)', async () => {
+  const task = await request(app).post(`/api/projects/${projectId}/tasks`).set(auth(pmToken))
+    .send({ title: 'Tagged', tags: ['Security', 'security', '  Identity  ', ''] });
+  assert.deepEqual(task.body.task.tags, ['security', 'identity']);
+});
+
+test('EVM: project exposes earned-value metrics and portfolio rollup', async () => {
+  // give the project a budget, actual cost and a scored task
+  await request(app).patch(`/api/projects/${projectId}`).set(auth(adminToken))
+    .send({ budget: 1000, actual_cost: 400, start_date: '2026-01-01', end_date: '2026-12-31' });
+  const task = await request(app).post(`/api/projects/${projectId}/tasks`).set(auth(pmToken))
+    .send({ title: 'EVM task', percent_complete: 40 });
+
+  const detail = await request(app).get(`/api/projects/${projectId}`).set(auth(adminToken));
+  assert.ok(detail.body.evm, 'evm block present');
+  assert.equal(detail.body.evm.bac, 1000);
+  assert.ok(detail.body.evm.cpi != null, 'cpi computed from AC');
+  assert.ok(['green', 'amber', 'red'].includes(detail.body.evm.cost_health));
+
+  const dash = await request(app).get('/api/dashboard/summary').set(auth(adminToken));
+  assert.ok(Array.isArray(dash.body.portfolio));
+  const row = dash.body.portfolio.find((p) => p.id === projectId);
+  assert.ok(row && row.spi !== undefined && row.cpi !== undefined);
+  assert.ok(dash.body.kpis.total >= 1);
+
+  // percent_complete forced to 100 when a task is marked done
+  const done = await request(app).patch(`/api/tasks/${task.body.task.id}`).set(auth(pmToken))
+    .send({ status: 'done' });
+  assert.equal(done.body.task.percent_complete, 100);
+});
+
 test('CSV export streams scoped data with headers', async () => {
   const res = await request(app).get('/api/export/projects?format=csv').set(auth(adminToken));
   assert.equal(res.status, 200);

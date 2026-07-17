@@ -69,6 +69,8 @@ export interface Project {
   start_date: string | null;
   end_date: string | null;
   budget: string | null;
+  actual_cost: string | null;
+  progress: number;
   task_count: number;
   blocked_count: number;
   members: ProjectMember[];
@@ -102,9 +104,80 @@ export interface Task {
   sort_order: number;
   is_milestone: boolean;
   estimate_hours: string | null;
+  logged_hours: number;
+  percent_complete: number;
+  tags: string[];
   dependencies: TaskDependency[];
   project_name?: string;
   branch_code?: string;
+}
+
+export type RiskCategory = 'risk' | 'issue' | 'assumption' | 'dependency';
+export type RiskStatus = 'open' | 'mitigating' | 'closed' | 'accepted';
+
+export interface Risk {
+  id: string;
+  project_id: string;
+  category: RiskCategory;
+  title: string;
+  description: string | null;
+  likelihood: number;
+  impact: number;
+  severity: number;
+  status: RiskStatus;
+  owner_id: string | null;
+  owner_name: string | null;
+  mitigation_plan: string | null;
+  due_date: string | null;
+  closed_at: string | null;
+  created_by_name: string | null;
+  created_at: string;
+}
+
+export type Health = 'green' | 'amber' | 'red' | 'unknown';
+
+export interface Evm {
+  bac: number | null;
+  ac: number | null;
+  ev: number | null;
+  pv: number | null;
+  percent_complete: number | null;
+  planned_percent: number | null;
+  sv: number | null;
+  spi: number | null;
+  cv: number | null;
+  cpi: number | null;
+  eac: number | null;
+  vac: number | null;
+  schedule_health: Health;
+  cost_health: Health;
+  scope_health: Health;
+  high_risk_count: number;
+}
+
+export interface PortfolioRow {
+  id: string;
+  name: string;
+  rag_status: Rag;
+  status: ProjectStatus;
+  percent_complete: number | null;
+  spi: number | null;
+  cpi: number | null;
+  budget: number | null;
+  actual_cost: number | null;
+  vac: number | null;
+  schedule_health: Health;
+  cost_health: Health;
+}
+
+export interface TimeEntry {
+  id: string;
+  task_id: string;
+  user_id: string;
+  user_name: string;
+  hours: string;
+  work_date: string;
+  notes: string | null;
 }
 
 export interface TaskComment {
@@ -216,6 +289,10 @@ export interface Agenda {
   next_steps: { id: string; title: string; next_steps: string; status: TaskStatus; assignee_name: string | null }[];
   overdue_tasks: { id: string; title: string; due_date: string; assignee_name: string | null }[];
   open_grc_checkpoints: { id: string; title: string; checkpoint_type: GrcType; status: GrcStatus; due_date: string | null }[];
+  top_risks: {
+    id: string; title: string; category: RiskCategory; severity: number; likelihood: number; impact: number;
+    status: RiskStatus; mitigation_plan: string | null; owner_name: string | null;
+  }[];
 }
 
 export const isGlobalAdmin = (me: Me | null) =>

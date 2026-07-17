@@ -11,12 +11,26 @@ const STATUSES = ['todo', 'in_progress', 'blocked', 'in_review', 'done'];
 const PRIORITIES = ['low', 'medium', 'high', 'critical'];
 
 const TASK_SELECT = `
-  SELECT t.*, u.full_name AS assignee_name,
+  SELECT t.*,
+         u.full_name AS assignee_name,
+         COALESCE((SELECT sum(e.hours) FROM time_entries e WHERE e.task_id = t.id), 0)::float AS logged_hours,
          COALESCE((SELECT json_agg(json_build_object('id', d.depends_on_task_id, 'title', dt.title, 'status', dt.status))
            FROM task_dependencies d JOIN tasks dt ON dt.id = d.depends_on_task_id
            WHERE d.task_id = t.id), '[]') AS dependencies
   FROM tasks t LEFT JOIN users u ON u.id = t.assignee_id
 `;
+
+// Normalize a tags payload into a clean lowercased string[] (max 10, deduped)
+function normalizeTags(input) {
+  if (!Array.isArray(input)) return null;
+  const tags = [...new Set(input.map((t) => String(t).trim().toLowerCase()).filter(Boolean))];
+  return tags.slice(0, 10);
+}
+
+const clampPercent = (v) => {
+  const n = Math.round(Number(v));
+  return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 0;
+};
 
 async function onTaskBlocked(project, task, actorId) {
   await notifyUsers(
@@ -75,10 +89,10 @@ router.post('/projects/:projectId/tasks', async (req, res) => {
     const { rows } = await query(
       `INSERT INTO tasks (project_id, title, description, assignee_id, status, priority,
                           start_date, due_date, blocker_explanation, next_steps, sort_order, created_by,
-                          completed_at, is_milestone, estimate_hours)
+                          completed_at, is_milestone, estimate_hours, tags, percent_complete)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
                COALESCE((SELECT max(sort_order) + 1 FROM tasks WHERE project_id = $1), 0),
-               $11, $12, $13, $14)
+               $11, $12, $13, $14, $15, $16)
        RETURNING id`,
       [
         req.params.projectId, b.title.trim(), b.description?.trim() || null, b.assignee_id || null,
@@ -86,7 +100,8 @@ router.post('/projects/:projectId/tasks', async (req, res) => {
         b.start_date || null, b.due_date || null,
         b.blocker_explanation?.trim() || null, b.next_steps?.trim() || null,
         req.user.id, status === 'done' ? new Date() : null,
-        b.is_milestone === true, b.estimate_hours ?? null,
+        b.is_milestone === true, b.estimate_hours ?? null, normalizeTags(b.tags) ?? [],
+        status === 'done' ? 100 : clampPercent(b.percent_complete),
       ]
     );
     await logAudit(req, 'create', 'task', rows[0].id, { after: { title: b.title, project_id: req.params.projectId } });
@@ -125,7 +140,14 @@ router.patch('/tasks/:id', async (req, res) => {
     sort_order: Number.isInteger(b.sort_order) ? b.sort_order : existing.sort_order,
     is_milestone: typeof b.is_milestone === 'boolean' ? b.is_milestone : existing.is_milestone,
     estimate_hours: b.estimate_hours !== undefined ? b.estimate_hours ?? null : existing.estimate_hours,
+    tags: b.tags !== undefined ? normalizeTags(b.tags) ?? existing.tags : existing.tags,
+    percent_complete: b.percent_complete !== undefined ? clampPercent(b.percent_complete) : existing.percent_complete,
   };
+  // Keep progress consistent with terminal statuses
+  if (next.status === 'done') next.percent_complete = 100;
+  else if (existing.status !== 'done' && next.status === 'todo' && b.percent_complete === undefined) {
+    next.percent_complete = existing.percent_complete;
+  }
   if (next.status === 'blocked' && !next.blocker_explanation) {
     return res.status(400).json({ error: 'A blocked task requires a blocker explanation' });
   }
@@ -136,12 +158,12 @@ router.patch('/tasks/:id', async (req, res) => {
     await query(
       `UPDATE tasks SET title=$1, description=$2, assignee_id=$3, status=$4, priority=$5,
               start_date=$6, due_date=$7, blocker_explanation=$8, next_steps=$9, sort_order=$10,
-              completed_at=$11, is_milestone=$12, estimate_hours=$13
-       WHERE id = $14`,
+              completed_at=$11, is_milestone=$12, estimate_hours=$13, tags=$14, percent_complete=$15
+       WHERE id = $16`,
       [
         next.title, next.description, next.assignee_id, next.status, next.priority,
         next.start_date, next.due_date, next.blocker_explanation, next.next_steps, next.sort_order,
-        completed_at, next.is_milestone, next.estimate_hours, req.params.id,
+        completed_at, next.is_milestone, next.estimate_hours, next.tags, next.percent_complete, req.params.id,
       ]
     );
   } catch (err) {

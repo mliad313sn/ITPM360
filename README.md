@@ -8,8 +8,15 @@ Enterprise IT project management for a global organization: countries → branch
   (Global Admin, Branch Manager, Project Manager, Viewer) enforced on every endpoint
 - **Projects** — RAG health, lifecycle status, PM + team, budget, GRC checkpoints
   (governance / risk / compliance gates with review workflow)
-- **Tasks** — assignee, timeline, priority, milestones, estimates, finish-to-start
-  dependencies (cycle-safe), comments, and enforced **blocker explanations** + next steps
+- **Tasks** — assignee, timeline, priority, % complete, milestones, estimates + logged
+  time, tags, finish-to-start dependencies (cycle-safe), comments, and enforced
+  **blocker explanations** + next steps
+- **Risk register (RAID)** — risks / issues / assumptions / dependencies with
+  likelihood × impact scoring, a 5×5 heat matrix, owners and mitigation plans;
+  high-severity risks notify stakeholders and feed meeting agendas
+- **Earned Value Management** — SPI, CPI, SV, CV, EAC, VAC per project from budget,
+  actual cost and estimate-weighted progress; portfolio control table with SPI/CPI
+  health dots; multi-dimensional health (on time / on budget / scope)
 - **Meeting Hub** — agendas auto-built from live project data (RAG, blockers with
   reasons, next steps, overdue work, open GRC gates), frozen as a permanent record on completion
 - **Dashboards** — global executive and branch-level views; RAG donut, status and

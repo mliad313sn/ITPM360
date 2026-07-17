@@ -63,5 +63,6 @@ export const WEBHOOK_EVENTS = [
   'project.status_changed',
   'task.blocked',
   'task.assigned',
+  'risk.raised',
   'meeting.completed',
 ];

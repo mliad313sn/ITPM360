@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { useFeedback } from '@/components/feedback';
-import type { Task, TaskComment, TaskPriority, TaskStatus, UserRow, Project } from '@/lib/types';
+import type { Task, TaskComment, TaskPriority, TaskStatus, TimeEntry, UserRow, Project } from '@/lib/types';
 import { Button, Modal, Field, Input, Select, Textarea, ErrorNote, EmptyState, cx, formatDate } from '@/components/ui';
 import { TaskStatusBadge, PriorityLabel, taskStatusLabels } from '@/components/task-badges';
 import { KanbanBoard } from '@/components/kanban';
@@ -12,8 +12,90 @@ import { GanttChart } from '@/components/gantt';
 const emptyForm = {
   title: '', description: '', assignee_id: '', status: 'todo' as TaskStatus,
   priority: 'medium' as TaskPriority, start_date: '', due_date: '', blocker_explanation: '', next_steps: '',
-  is_milestone: false, estimate_hours: '',
+  is_milestone: false, estimate_hours: '', tags: '', percent_complete: 0,
 };
+
+// Log-time widget shown when editing an existing task
+function TimeLog({ taskId, estimate }: { taskId: string; estimate: string | null }) {
+  const { toast, confirm } = useFeedback();
+  const [entries, setEntries] = useState<TimeEntry[] | null>(null);
+  const [total, setTotal] = useState(0);
+  const [hours, setHours] = useState('');
+  const [notes, setNotes] = useState('');
+
+  const load = () =>
+    api<{ entries: TimeEntry[]; total_hours: number }>(`/tasks/${taskId}/time`).then((d) => {
+      setEntries(d.entries);
+      setTotal(d.total_hours);
+    });
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskId]);
+
+  async function log() {
+    const h = Number(hours);
+    if (!(h > 0 && h <= 24)) {
+      toast('error', 'Hours must be between 0 and 24');
+      return;
+    }
+    try {
+      await api(`/tasks/${taskId}/time`, { method: 'POST', body: JSON.stringify({ hours: h, notes: notes || null }) });
+      setHours('');
+      setNotes('');
+      load();
+    } catch (err) {
+      toast('error', err instanceof ApiError ? err.message : 'Could not log time');
+    }
+  }
+
+  async function del(id: string) {
+    if (!(await confirm({ title: 'Delete time entry?', confirmLabel: 'Delete', danger: true }))) return;
+    await api(`/time/${id}`, { method: 'DELETE' });
+    load();
+  }
+
+  const est = estimate ? Number(estimate) : null;
+  const over = est != null && total > est;
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Time tracking</p>
+        <p className="text-xs text-slate-500">
+          <span className={cx('font-semibold', over ? 'text-rose-600' : 'text-slate-700')}>{total}h logged</span>
+          {est != null && <span className="text-slate-400"> / {est}h estimate</span>}
+        </p>
+      </div>
+      {est != null && est > 0 && (
+        <div className="mb-2 h-1.5 overflow-hidden rounded-full bg-slate-200">
+          <div
+            className={cx('h-full rounded-full', over ? 'bg-rose-500' : 'bg-indigo-500')}
+            style={{ width: `${Math.min(100, (total / est) * 100)}%` }}
+          />
+        </div>
+      )}
+      {entries && entries.length > 0 && (
+        <ul className="mb-2 max-h-28 space-y-1 overflow-y-auto">
+          {entries.map((e) => (
+            <li key={e.id} className="flex items-center justify-between rounded-md bg-white px-2.5 py-1.5 text-xs">
+              <span className="truncate text-slate-700">
+                <span className="font-semibold">{Number(e.hours)}h</span> · {e.user_name} · {formatDate(e.work_date)}
+                {e.notes && <span className="text-slate-400"> — {e.notes}</span>}
+              </span>
+              <button type="button" onClick={() => del(e.id)} className="ml-2 shrink-0 text-slate-400 hover:text-rose-500">×</button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex gap-2">
+        <Input type="number" min="0" step="0.25" value={hours} onChange={(e) => setHours(e.target.value)} placeholder="Hours" className="w-24" />
+        <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="What did you work on?" />
+        <Button type="button" variant="secondary" onClick={log} disabled={!hours}>Log</Button>
+      </div>
+    </div>
+  );
+}
 
 // Dependencies manager — shown when editing an existing task
 function DependencyEditor({
@@ -188,6 +270,8 @@ export function TasksSection({
             next_steps: t.next_steps ?? '',
             is_milestone: t.is_milestone,
             estimate_hours: t.estimate_hours ? String(Number(t.estimate_hours)) : '',
+            tags: t.tags.join(', '),
+            percent_complete: t.percent_complete,
           }
     );
     setError(null);
@@ -211,6 +295,7 @@ export function TasksSection({
       blocker_explanation: form.blocker_explanation || null,
       next_steps: form.next_steps || null,
       estimate_hours: form.estimate_hours === '' ? null : Number(form.estimate_hours),
+      tags: form.tags.split(',').map((t) => t.trim()).filter(Boolean),
     });
     try {
       if (editing === 'new') {
@@ -307,13 +392,39 @@ export function TasksSection({
                 <p className="mt-0.5 text-xs text-slate-500">
                   {t.assignee_name ?? 'Unassigned'} · {formatDate(t.start_date)} →{' '}
                   <span className={cx(isOverdue(t) && 'font-semibold text-rose-600')}>{formatDate(t.due_date)}</span>
-                  {t.estimate_hours && <> · ~{Number(t.estimate_hours)}h</>}
+                  {(t.logged_hours > 0 || t.estimate_hours) && (
+                    <>
+                      {' · '}
+                      <span className={cx(
+                        t.estimate_hours && t.logged_hours > Number(t.estimate_hours) && 'font-semibold text-rose-600'
+                      )}>
+                        {t.logged_hours}h{t.estimate_hours ? ` / ${Number(t.estimate_hours)}h` : ' logged'}
+                      </span>
+                    </>
+                  )}
                   {t.dependencies.length > 0 && (
                     <span className="ml-1 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
                       {t.dependencies.length} dep{t.dependencies.length > 1 ? 's' : ''}
                     </span>
                   )}
                 </p>
+                {t.tags.length > 0 && (
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {t.tags.map((tag) => (
+                      <span key={tag} className="rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-600">
+                        #{tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {t.percent_complete > 0 && t.status !== 'done' && (
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <div className="h-1 w-32 overflow-hidden rounded-full bg-slate-100">
+                      <div className="h-full rounded-full bg-indigo-500" style={{ width: `${t.percent_complete}%` }} />
+                    </div>
+                    <span className="text-[10px] tabular-nums text-slate-400">{t.percent_complete}%</span>
+                  </div>
+                )}
                 {t.status === 'blocked' && t.blocker_explanation && (
                   <p className="mt-1.5 rounded-lg bg-rose-50 px-3 py-1.5 text-xs text-rose-700">
                     <span className="font-semibold">Blocker:</span> {t.blocker_explanation}
@@ -389,6 +500,21 @@ export function TasksSection({
                 />
               </Field>
             </div>
+            <Field label={`Progress — ${form.status === 'done' ? 100 : form.percent_complete}% complete`} hint="Feeds earned-value (weighted by estimate)">
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={5}
+                value={form.status === 'done' ? 100 : form.percent_complete}
+                disabled={form.status === 'done'}
+                onChange={(e) => setForm({ ...form, percent_complete: Number(e.target.value) })}
+                className="w-full accent-indigo-600 disabled:opacity-50"
+              />
+            </Field>
+            <Field label="Tags" hint="Comma-separated labels for filtering, e.g. security, migration">
+              <Input value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} placeholder="security, critical-path" />
+            </Field>
             <label className="flex items-center gap-2 text-sm text-slate-700">
               <input
                 type="checkbox"
@@ -419,6 +545,7 @@ export function TasksSection({
           </form>
           {editing !== 'new' && (
             <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
+              <TimeLog taskId={editing.id} estimate={editing.estimate_hours} />
               <DependencyEditor task={editing} allTasks={tasks} onChanged={onChanged} />
               <CommentThread taskId={editing.id} />
             </div>

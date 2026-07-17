@@ -72,31 +72,31 @@ async function seed() {
     {
       branch: 'DE-BER', name: 'ERP Cloud Migration', pm: 'raj.patel@itpm360.dev',
       desc: 'Migrate the on-premise ERP stack to a managed cloud platform with zero data loss.',
-      rag: 'amber', status: 'active', start: '2026-03-01', end: '2026-11-30', budget: 850000,
+      rag: 'amber', status: 'active', start: '2026-03-01', end: '2026-11-30', budget: 850000, actual: 520000,
       members: [['lena.mueller@itpm360.dev', 'sponsor'], ['dana.kim@itpm360.dev', 'analyst']],
     },
     {
       branch: 'DE-BER', name: 'Zero-Trust Network Rollout', pm: 'raj.patel@itpm360.dev',
       desc: 'Implement zero-trust segmentation and identity-aware access across the Berlin campus.',
-      rag: 'red', status: 'active', start: '2026-01-15', end: '2026-09-30', budget: 420000,
+      rag: 'red', status: 'active', start: '2026-01-15', end: '2026-09-30', budget: 420000, actual: 310000,
       members: [['dana.kim@itpm360.dev', 'analyst']],
     },
     {
       branch: 'DE-MUC', name: 'Service Desk Modernization', pm: 'raj.patel@itpm360.dev',
       desc: 'Replace the legacy ticketing system with an ITIL-aligned service management suite.',
-      rag: 'green', status: 'planning', start: '2026-08-01', end: '2027-02-28', budget: 210000,
+      rag: 'green', status: 'planning', start: '2026-08-01', end: '2027-02-28', budget: 210000, actual: 0,
       members: [],
     },
     {
       branch: 'US-NYC', name: 'Data Warehouse Consolidation', pm: 'sofia.garcia@itpm360.dev',
       desc: 'Consolidate three regional warehouses into a single governed lakehouse.',
-      rag: 'green', status: 'active', start: '2026-02-01', end: '2026-12-15', budget: 1200000,
+      rag: 'green', status: 'active', start: '2026-02-01', end: '2026-12-15', budget: 1200000, actual: 250000,
       members: [['dana.kim@itpm360.dev', 'analyst']],
     },
     {
       branch: 'SG-SIN', name: 'APAC Disaster Recovery Upgrade', pm: 'wei.tan@itpm360.dev',
       desc: 'Stand up an active-active DR site and cut RTO from 24h to 1h for tier-1 systems.',
-      rag: 'amber', status: 'on_hold', start: '2026-04-01', end: '2026-10-31', budget: 640000,
+      rag: 'amber', status: 'on_hold', start: '2026-04-01', end: '2026-10-31', budget: 640000, actual: 180000,
       members: [],
     },
   ];
@@ -105,10 +105,10 @@ async function seed() {
   for (const p of projectDefs) {
     const { rows } = await query(
       `INSERT INTO projects (branch_id, name, description, project_manager_id, rag_status, status,
-                             start_date, end_date, budget, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+                             start_date, end_date, budget, actual_cost, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
       [branches[p.branch], p.name, p.desc, users[p.pm], p.rag, p.status, p.start, p.end, p.budget,
-       users['admin@itpm360.dev']]
+       p.actual ?? null, users['admin@itpm360.dev']]
     );
     projects[p.name] = rows[0].id;
     for (const [email, role] of p.members) {
@@ -151,15 +151,21 @@ async function seed() {
       next: 'Await budget release confirmation from regional CFO.',
       blocker: 'Project on hold: capex budget for the secondary data centre frozen until Q3 review.' },
   ];
+  // Sensible progress by status for earned-value demonstration
+  const pctByStatus = { done: 100, in_review: 80, in_progress: 45, blocked: 20, todo: 0 };
   for (const [i, t] of taskDefs.entries()) {
     await query(
       `INSERT INTO tasks (project_id, title, assignee_id, status, priority, start_date, due_date,
-                          blocker_explanation, next_steps, sort_order, created_by, completed_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, CASE WHEN $4 = 'done'::task_status THEN now() END)`,
+                          blocker_explanation, next_steps, sort_order, created_by, completed_at, percent_complete)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, CASE WHEN $4 = 'done'::task_status THEN now() END, $12)`,
       [projects[t.project], t.title, t.assignee ? users[t.assignee] : null, t.status, t.priority,
-       t.start, t.due, t.blocker, t.next, i, users['admin@itpm360.dev']]
+       t.start, t.due, t.blocker, t.next, i, users['admin@itpm360.dev'], pctByStatus[t.status] ?? 0]
     );
   }
+
+  // Progress variety so the EVM control table shows a green/amber/red mix
+  await query(`UPDATE tasks SET percent_complete = 82 WHERE title = 'Schema harmonization for sales data'`);
+  await query(`UPDATE tasks SET percent_complete = 55 WHERE title = 'Finance module pilot migration'`);
 
   // PM extras: milestones, estimates, one dependency chain and a comment
   await query(`UPDATE tasks SET is_milestone = true, estimate_hours = 16
@@ -200,6 +206,63 @@ async function seed() {
                CASE WHEN $4 = ANY(ARRAY['approved','rejected','waived']::grc_status[]) THEN now() END)`,
       [projects[g.project], g.type, g.title, g.status, g.due, users['admin@itpm360.dev']]
     );
+  }
+
+  // Risk register (RAID)
+  const riskDefs = [
+    { project: 'ERP Cloud Migration', category: 'risk', title: 'Data migration integrity failure at cutover',
+      likelihood: 3, impact: 5, status: 'mitigating', owner: 'raj.patel@itpm360.dev',
+      mitigation: 'Full dry-run with production copy; reconciliation scripts; rollback window agreed with business.' },
+    { project: 'ERP Cloud Migration', category: 'dependency', title: 'Middleware vendor MSA not countersigned',
+      likelihood: 4, impact: 4, status: 'open', owner: 'lena.mueller@itpm360.dev',
+      mitigation: 'Escalated to procurement director; fallback licensing option scoped.' },
+    { project: 'Zero-Trust Network Rollout', category: 'risk', title: 'Conflicting AD forests block IdP consolidation',
+      likelihood: 4, impact: 5, status: 'open', owner: 'raj.patel@itpm360.dev',
+      mitigation: 'Security board decision on tenant topology; phased migration with approved downtime window.' },
+    { project: 'Zero-Trust Network Rollout', category: 'issue', title: 'Pilot latency above SLA on floor 3',
+      likelihood: 3, impact: 3, status: 'mitigating', owner: 'dana.kim@itpm360.dev',
+      mitigation: 'Tune policy evaluation order; add local PEP cache before extending to floors 4-6.' },
+    { project: 'Data Warehouse Consolidation', category: 'assumption', title: 'Source teams provide schemas on time',
+      likelihood: 2, impact: 3, status: 'open', owner: 'sofia.garcia@itpm360.dev', mitigation: null },
+    { project: 'APAC Disaster Recovery Upgrade', category: 'risk', title: 'Capex freeze delays DR site beyond hurricane season',
+      likelihood: 4, impact: 4, status: 'open', owner: 'wei.tan@itpm360.dev',
+      mitigation: 'Interim warm-standby in existing cloud region while budget is reviewed.' },
+  ];
+  for (const r of riskDefs) {
+    await query(
+      `INSERT INTO risks (project_id, category, title, likelihood, impact, status, owner_id, mitigation_plan, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [projects[r.project], r.category, r.title, r.likelihood, r.impact, r.status,
+       users[r.owner], r.mitigation, users['admin@itpm360.dev']]
+    );
+  }
+
+  // Time entries logged against a few tasks
+  const timeDefs = [
+    { task: 'Data model mapping legacy → cloud', user: 'dana.kim@itpm360.dev', hours: 6.5, days: 40, notes: 'Entity mapping workshop' },
+    { task: 'Data model mapping legacy → cloud', user: 'dana.kim@itpm360.dev', hours: 7, days: 38, notes: 'Field-level reconciliation' },
+    { task: 'Finance module pilot migration', user: 'raj.patel@itpm360.dev', hours: 5, days: 4, notes: 'Dry-run setup' },
+    { task: 'Finance module pilot migration', user: 'raj.patel@itpm360.dev', hours: 4.5, days: 2, notes: 'Q2 close data load' },
+    { task: 'Network micro-segmentation pilot (floor 3)', user: 'dana.kim@itpm360.dev', hours: 8, days: 6, notes: 'Policy authoring' },
+  ];
+  for (const t of timeDefs) {
+    await query(
+      `INSERT INTO time_entries (task_id, user_id, hours, work_date, notes)
+       SELECT id, $2, $3, (CURRENT_DATE - ($4 || ' days')::interval)::date, $5 FROM tasks WHERE title = $1 LIMIT 1`,
+      [t.task, users[t.user], t.hours, String(t.days), t.notes]
+    );
+  }
+
+  // Task tags
+  const tagDefs = [
+    { task: 'Finance module pilot migration', tags: ['finance', 'migration', 'critical-path'] },
+    { task: 'Vendor contract renewal for middleware', tags: ['procurement', 'external-dependency'] },
+    { task: 'Identity provider consolidation', tags: ['security', 'identity'] },
+    { task: 'Cutover runbook and rollback plan', tags: ['cutover', 'documentation'] },
+    { task: 'Schema harmonization for sales data', tags: ['data-modeling'] },
+  ];
+  for (const t of tagDefs) {
+    await query(`UPDATE tasks SET tags = $2 WHERE title = $1`, [t.task, t.tags]);
   }
 
   // Meetings — one upcoming steering meeting per active project

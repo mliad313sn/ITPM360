@@ -47,11 +47,29 @@ downgrades notify the PM and branch managers and fire `project.rag_changed`.
 | PATCH/DELETE | `/tasks/:id` | team, managers, or the assignee |
 | GET/POST | `/tasks/:id/comments` | discussion thread |
 | POST/DELETE | `/tasks/:id/dependencies[/:dependsOnId]` | finish-to-start; cycles rejected (409) |
+| GET/POST | `/tasks/:id/time` | log/list time entries; response includes `total_hours` |
+| DELETE | `/time/:id` | author or a project manager |
 | GET | `/my/tasks` | caller's open work |
 
 Setting `status: "blocked"` **requires** `blocker_explanation` (400 otherwise; also
 enforced by a DB constraint). `next_steps` feeds meeting agendas. Extra fields:
-`priority`, `is_milestone`, `estimate_hours`, `sort_order` (Kanban).
+`priority`, `is_milestone`, `estimate_hours`, `percent_complete` (0-100, forced to
+100 on `done`, drives earned value), `tags` (normalized to lowercase), `sort_order` (Kanban).
+Each task also returns `logged_hours` (sum of time entries).
+
+## Risk register (RAID) & EVM
+
+| Method | Path | Notes |
+|---|---|---|
+| GET/POST | `/projects/:id/risks` | risks/issues/assumptions/dependencies; `likelihood`×`impact` (1-5) → `severity` (1-25) |
+| PATCH/DELETE | `/risks/:id` | project managers; high-severity (≥12) raises notify PM/BM + `risk.raised` webhook |
+
+Earned Value Management is computed and returned with the project detail
+(`GET /projects/:id` → `evm`) and aggregated per project in the dashboard
+`portfolio` array: **BAC** (budget), **AC** (`actual_cost`), **EV** (budget ×
+estimate-weighted % complete), **PV** (budget × schedule elapsed), **SV/SPI**,
+**CV/CPI**, **EAC**, **VAC**, plus derived `schedule_health`, `cost_health` and
+`scope_health` (from open high-severity risks).
 
 ## Meetings
 

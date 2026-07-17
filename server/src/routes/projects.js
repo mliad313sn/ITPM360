@@ -4,6 +4,7 @@ import { isGlobalAdmin, scopedBranchIds, canManageBranch, canManageProject, hasB
 import { logAudit, diff } from '../lib/audit.js';
 import { notifyUsers, projectStakeholders, isRagDowngrade } from '../lib/notify.js';
 import { emitEvent } from '../lib/webhooks.js';
+import { projectEvm } from '../lib/evm.js';
 
 const router = Router();
 
@@ -16,6 +17,9 @@ const PROJECT_SELECT = `
          pm.full_name AS pm_name,
          (SELECT count(*)::int FROM tasks t WHERE t.project_id = p.id) AS task_count,
          (SELECT count(*)::int FROM tasks t WHERE t.project_id = p.id AND t.status = 'blocked') AS blocked_count,
+         COALESCE((SELECT round(
+             sum(t.percent_complete * COALESCE(t.estimate_hours, 1)) / NULLIF(sum(COALESCE(t.estimate_hours, 1)), 0)
+           )::int FROM tasks t WHERE t.project_id = p.id), 0) AS progress,
          COALESCE((SELECT json_agg(json_build_object(
              'user_id', m.user_id, 'full_name', mu.full_name, 'member_role', m.member_role))
            FROM project_members m JOIN users mu ON mu.id = m.user_id
@@ -64,11 +68,12 @@ router.get('/:id', async (req, res) => {
     project.project_manager_id === req.user.id ||
     project.members.some((m) => m.user_id === req.user.id);
   if (!visible) return res.status(403).json({ error: 'No access to this project' });
-  res.json({ project });
+  const evm = await projectEvm(project.id, project);
+  res.json({ project, evm });
 });
 
 router.post('/', async (req, res) => {
-  const { branch_id, name, description, project_manager_id, rag_status, status, start_date, end_date, budget } =
+  const { branch_id, name, description, project_manager_id, rag_status, status, start_date, end_date, budget, actual_cost } =
     req.body ?? {};
   if (!branch_id || !name?.trim() || !project_manager_id) {
     return res.status(400).json({ error: 'branch_id, name and project_manager_id are required' });
@@ -80,8 +85,8 @@ router.post('/', async (req, res) => {
   try {
     const { rows } = await query(
       `INSERT INTO projects (branch_id, name, description, project_manager_id, rag_status, status,
-                             start_date, end_date, budget, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+                             start_date, end_date, budget, actual_cost, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
       [
         branch_id,
         name.trim(),
@@ -92,6 +97,7 @@ router.post('/', async (req, res) => {
         start_date || null,
         end_date || null,
         budget ?? null,
+        actual_cost ?? null,
         req.user.id,
       ]
     );
@@ -123,16 +129,17 @@ router.patch('/:id', async (req, res) => {
     start_date: body.start_date !== undefined ? body.start_date || null : existing.start_date,
     end_date: body.end_date !== undefined ? body.end_date || null : existing.end_date,
     budget: body.budget !== undefined ? body.budget ?? null : existing.budget,
+    actual_cost: body.actual_cost !== undefined ? body.actual_cost ?? null : existing.actual_cost,
   };
 
   try {
     await query(
       `UPDATE projects SET name = $1, description = $2, project_manager_id = $3, rag_status = $4,
-              status = $5, start_date = $6, end_date = $7, budget = $8
-       WHERE id = $9`,
+              status = $5, start_date = $6, end_date = $7, budget = $8, actual_cost = $9
+       WHERE id = $10`,
       [
         next.name, next.description, next.project_manager_id, next.rag_status,
-        next.status, next.start_date, next.end_date, next.budget, req.params.id,
+        next.status, next.start_date, next.end_date, next.budget, next.actual_cost, req.params.id,
       ]
     );
   } catch (err) {

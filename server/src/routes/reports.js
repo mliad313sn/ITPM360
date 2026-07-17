@@ -3,6 +3,7 @@ import pptxgen from 'pptxgenjs';
 import { query } from '../db.js';
 import { isGlobalAdmin, scopedBranchIds } from '../lib/rbac.js';
 import { logAudit } from '../lib/audit.js';
+import { computeEvm } from '../lib/evm.js';
 
 const router = Router();
 
@@ -53,7 +54,11 @@ router.get('/monthly', async (req, res) => {
        (SELECT count(*)::int FROM tasks t WHERE t.project_id = p.id AND t.completed_at >= $${params.length + 1} AND t.completed_at < $${params.length + 2}) AS done_this_month,
        (SELECT count(*)::int FROM meetings mt WHERE mt.project_id = p.id AND mt.scheduled_at >= $${params.length + 1} AND mt.scheduled_at < $${params.length + 2}) AS meetings_this_month,
        COALESCE((SELECT json_agg(json_build_object('type', g.checkpoint_type, 'title', g.title, 'status', g.status))
-         FROM grc_checkpoints g WHERE g.project_id = p.id AND g.status IN ('pending','in_review')), '[]') AS open_grc
+         FROM grc_checkpoints g WHERE g.project_id = p.id AND g.status IN ('pending','in_review')), '[]') AS open_grc,
+       COALESCE((SELECT json_agg(json_build_object('title', r.title, 'severity', r.severity, 'status', r.status) ORDER BY r.severity DESC)
+         FROM risks r WHERE r.project_id = p.id AND r.status IN ('open','mitigating')), '[]') AS open_risks,
+       COALESCE((SELECT json_agg(json_build_object('percent_complete', t.percent_complete, 'estimate_hours', t.estimate_hours))
+         FROM tasks t WHERE t.project_id = p.id), '[]') AS task_progress
      FROM projects p
      JOIN branches b ON b.id = p.branch_id
      JOIN countries c ON c.id = b.country_id
@@ -62,6 +67,14 @@ router.get('/monthly', async (req, res) => {
      ORDER BY c.name, b.name, p.name`,
     [...params, range.start, range.end]
   );
+
+  for (const p of projects) {
+    p.evm = computeEvm({
+      budget: p.budget, actual_cost: p.actual_cost, start_date: p.start_date, end_date: p.end_date,
+      tasks: p.task_progress,
+    });
+  }
+  const fmtIndex = (v) => (v == null ? 'n/a' : v.toFixed(2));
 
   const pptx = new pptxgen();
   pptx.defineLayout({ name: 'WIDE', width: 13.33, height: 7.5 });
@@ -103,13 +116,18 @@ router.get('/monthly', async (req, res) => {
     const rows = [
       [
         { text: 'Project', options: { bold: true } }, { text: 'Branch', options: { bold: true } },
-        { text: 'PM', options: { bold: true } }, { text: 'RAG', options: { bold: true } },
-        { text: 'Status', options: { bold: true } }, { text: 'Tasks done', options: { bold: true } },
+        { text: 'RAG', options: { bold: true } }, { text: 'Compl.', options: { bold: true } },
+        { text: 'SPI', options: { bold: true } }, { text: 'CPI', options: { bold: true } },
+        { text: 'VAC', options: { bold: true } },
       ],
       ...projects.map((p) => [
-        p.name, `${p.branch_name} (${p.country_name})`, p.pm_name,
+        p.name, `${p.branch_name} (${p.country_name})`,
         { text: p.rag_status.toUpperCase(), options: { color: RAG_COLORS[p.rag_status], bold: true } },
-        p.status.replace('_', ' '), `${p.task_done}/${p.task_total}`,
+        p.evm.percent_complete != null ? `${Math.round(p.evm.percent_complete)}%` : '—',
+        { text: fmtIndex(p.evm.spi), options: { color: p.evm.spi != null && p.evm.spi < 0.9 ? 'D03B3B' : INK } },
+        { text: fmtIndex(p.evm.cpi), options: { color: p.evm.cpi != null && p.evm.cpi < 0.9 ? 'D03B3B' : INK } },
+        { text: p.evm.vac != null ? Math.round(p.evm.vac).toLocaleString() : '—',
+          options: { color: p.evm.vac != null && p.evm.vac < 0 ? 'D03B3B' : INK } },
       ]),
     ];
     sum.addTable(rows, {
@@ -132,11 +150,12 @@ router.get('/monthly', async (req, res) => {
     s.addShape('roundRect', { x: 10.6, y: 0.45, w: 2.1, h: 0.55, rectRadius: 0.27, fill: { color: RAG_COLORS[p.rag_status] } });
     s.addText(p.rag_status.toUpperCase(), { x: 10.6, y: 0.45, w: 2.1, h: 0.55, align: 'center', fontSize: 16, bold: true, color: 'FFFFFF' });
 
-    const progress = p.task_total ? Math.round((p.task_done / p.task_total) * 100) : 0;
+    const progress = p.evm.percent_complete != null ? Math.round(p.evm.percent_complete) : 0;
     const facts = [
       `Lifecycle: ${p.status.replace('_', ' ')}`,
       `Timeline: ${p.start_date?.toISOString().slice(0, 10) ?? '—'} → ${p.end_date?.toISOString().slice(0, 10) ?? '—'}`,
-      `Task progress: ${p.task_done}/${p.task_total} (${progress}%)`,
+      `Earned value: SPI ${fmtIndex(p.evm.spi)} · CPI ${fmtIndex(p.evm.cpi)} · ${progress}% complete`,
+      `Budget ${p.budget ? Number(p.budget).toLocaleString() : '—'} · EAC ${p.evm.eac != null ? Math.round(p.evm.eac).toLocaleString() : '—'} · VAC ${p.evm.vac != null ? Math.round(p.evm.vac).toLocaleString() : '—'}`,
       `Completed this month: ${p.done_this_month} · Meetings held: ${p.meetings_this_month}`,
     ];
     s.addText(facts.join('\n'), { x: 0.6, y: 1.7, w: 5.9, h: 1.7, fontSize: 13, color: INK, lineSpacing: 22 });
@@ -167,7 +186,15 @@ router.get('/monthly', async (req, res) => {
       p.open_grc.length
         ? p.open_grc.map((g) => `• [${g.type}] ${g.title} — ${g.status.replace('_', ' ')}`).join('\n')
         : 'All checkpoints decided.',
-      { x: 6.9, y: 4.55, w: 5.8, h: 2.3, fontSize: 11.5, color: INK, valign: 'top', lineSpacing: 16 }
+      { x: 6.9, y: 4.55, w: 5.8, h: 1.15, fontSize: 11.5, color: INK, valign: 'top', lineSpacing: 16 }
+    );
+
+    s.addText('Top risks', { x: 6.9, y: 5.75, w: 5.8, h: 0.4, fontSize: 15, bold: true, color: 'D97706' });
+    s.addText(
+      p.open_risks.length
+        ? p.open_risks.slice(0, 4).map((r) => `• [sev ${r.severity}] ${r.title} — ${r.status}`).join('\n')
+        : 'No open risks.',
+      { x: 6.9, y: 6.2, w: 5.8, h: 1.1, fontSize: 11.5, color: INK, valign: 'top', lineSpacing: 16 }
     );
   }
 
