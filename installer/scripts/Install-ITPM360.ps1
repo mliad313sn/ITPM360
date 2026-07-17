@@ -17,7 +17,8 @@ param(
   [int]$ApiPort        = 4000,
   [int]$WebPort        = 3000,
   [switch]$NoServices,                            # skip Windows service registration
-  [switch]$NoSeed                                 # skip demo data
+  [switch]$NoSeed,                                # skip demo data
+  [switch]$InPlace                                # run from AppSource directly (no copy) — e.g. a git clone
 )
 
 $ErrorActionPreference = 'Stop'
@@ -135,14 +136,20 @@ if ($exists -ne '1') {
 # ===========================================================================
 # 4. Deploy app files + write config
 # ===========================================================================
-Log "Deploying application files…" 'STEP'
-foreach ($d in 'server', 'web', 'docs') {
-  if (Test-Path (Join-Path $AppSource $d)) {
-    Copy-Item (Join-Path $AppSource $d) $InstallDir -Recurse -Force
+if ($InPlace) {
+  Log "Installing in place at $AppSource (no copy)" 'STEP'
+  $serverDir = Join-Path $AppSource 'server'
+  $webDir    = Join-Path $AppSource 'web'
+} else {
+  Log "Deploying application files…" 'STEP'
+  foreach ($d in 'server', 'web', 'docs') {
+    if (Test-Path (Join-Path $AppSource $d)) {
+      Copy-Item (Join-Path $AppSource $d) $InstallDir -Recurse -Force
+    }
   }
+  $serverDir = Join-Path $InstallDir 'server'
+  $webDir    = Join-Path $InstallDir 'web'
 }
-$serverDir = Join-Path $InstallDir 'server'
-$webDir    = Join-Path $InstallDir 'web'
 
 # URL-encode the password (it may contain # ! etc.) for the connection string
 Add-Type -AssemblyName System.Web
