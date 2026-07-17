@@ -15,6 +15,7 @@ import { EvmPanel } from '@/components/evm';
 import { CharterSection } from '@/components/charter-section';
 import { FinancialsSection } from '@/components/financials-section';
 import { GovernanceSection } from '@/components/governance-section';
+import { AnalysisSection } from '@/components/analysis-section';
 import {
   canManageBranch, canManageProject,
   type Branch, type CostBreakdown, type Evm, type EvmSnapshot, type GrcCheckpoint, type Meeting,
@@ -48,6 +49,7 @@ export default function ProjectDetailPage() {
   const [snapshots, setSnapshots] = useState<EvmSnapshot[]>([]);
   const [stakeholders, setStakeholders] = useState<Stakeholder[]>([]);
   const [raci, setRaci] = useState<RaciEntry[]>([]);
+  const [analyses, setAnalyses] = useState<Record<string, { content: Record<string, unknown>; updated_at: string }>>({});
   const [editing, setEditing] = useState(false);
   const [addingMember, setAddingMember] = useState(false);
   const [memberForm, setMemberForm] = useState({ user_id: '', member_role: 'member' });
@@ -63,6 +65,8 @@ export default function ProjectDetailPage() {
     api<{ snapshots: EvmSnapshot[] }>(`/projects/${id}/evm-history`).then((d) => setSnapshots(d.snapshots)).catch(() => {});
     api<{ stakeholders: Stakeholder[] }>(`/projects/${id}/stakeholders`).then((d) => setStakeholders(d.stakeholders)).catch(() => {});
     api<{ raci: RaciEntry[] }>(`/projects/${id}/raci`).then((d) => setRaci(d.raci)).catch(() => {});
+    api<{ analyses: Record<string, { content: Record<string, unknown>; updated_at: string }> }>(`/projects/${id}/analyses`)
+      .then((d) => setAnalyses(d.analyses)).catch(() => {});
   };
 
   const reloadProject = () =>
@@ -241,6 +245,8 @@ export default function ProjectDetailPage() {
           <FinancialsSection project={project} breakdown={costs} snapshots={snapshots} canManage={canManage} onChanged={loadWork} />
 
           <GovernanceSection project={project} stakeholders={stakeholders} raci={raci} users={users} canManage={canManage} onChanged={loadWork} />
+
+          <AnalysisSection project={project} analyses={analyses} canManage={canManage} onChanged={loadWork} />
 
           <GrcSection project={project} checkpoints={checkpoints} canManage={canManage} onChanged={loadWork} />
 

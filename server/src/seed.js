@@ -213,6 +213,28 @@ async function seed() {
     );
   }
 
+  // Analysis artifacts (SWOT + root cause) for the flagship project
+  await query(
+    `INSERT INTO project_analyses (project_id, analysis_type, content, updated_by) VALUES ($1,'swot',$2,$3)`,
+    [erp, JSON.stringify({
+      strengths: 'Executive sponsorship from the CFO\nExperienced migration partner',
+      weaknesses: 'Legacy customisations poorly documented\nThin internal cloud skills',
+      opportunities: '30% run-cost reduction\nReal-time month-end reporting',
+      threats: 'Vendor MSA delay\nParallel-run window collides with year-end freeze',
+    }), users['admin@itpm360.dev']]
+  );
+  await query(
+    `INSERT INTO project_analyses (project_id, analysis_type, content, updated_by) VALUES ($1,'root_cause',$2,$3)`,
+    [erp, JSON.stringify({
+      problem: 'Finance module dry-run reconciliation variance above threshold',
+      whys: ['Balances did not tie out', 'Opening balances mapped incorrectly',
+             'Chart-of-accounts mapping had gaps', 'Legacy sub-ledgers undocumented',
+             'No single source of truth for account hierarchy'],
+      root_cause: 'Missing authoritative chart-of-accounts mapping between legacy and cloud.',
+      countermeasure: 'Build and sign off a governed CoA mapping before the next dry-run; add a reconciliation gate.',
+    }), users['admin@itpm360.dev']]
+  );
+
   // Capacity variety (part-timers + a stretched PM) for the workload heatmap
   await query(`UPDATE users SET weekly_capacity_hours = 32 WHERE email = 'dana.kim@itpm360.dev'`);
   await query(`UPDATE users SET weekly_capacity_hours = 20 WHERE email = 'lena.mueller@itpm360.dev'`);

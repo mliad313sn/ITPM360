@@ -243,6 +243,24 @@ test('EVM: project exposes earned-value metrics and portfolio rollup', async () 
   assert.equal(done.body.task.percent_complete, 100);
 });
 
+test('analysis templates: SWOT upsert and retrieval', async () => {
+  const put = await request(app).put(`/api/projects/${projectId}/analyses/swot`).set(auth(pmToken))
+    .send({ content: { strengths: 'A', weaknesses: 'B', opportunities: 'C', threats: 'D' } });
+  assert.equal(put.status, 200);
+
+  // upsert (no duplicate row) and content updates
+  await request(app).put(`/api/projects/${projectId}/analyses/swot`).set(auth(pmToken))
+    .send({ content: { strengths: 'A2', weaknesses: 'B', opportunities: 'C', threats: 'D' } });
+  const get = await request(app).get(`/api/projects/${projectId}/analyses`).set(auth(pmToken));
+  assert.equal(get.body.analyses.swot.content.strengths, 'A2');
+
+  // unknown type rejected; viewer of another branch denied
+  const bad = await request(app).put(`/api/projects/${projectId}/analyses/bogus`).set(auth(pmToken)).send({ content: {} });
+  assert.equal(bad.status, 400);
+  const denied = await request(app).get(`/api/projects/${projectId}/analyses`).set(auth(viewerToken));
+  assert.equal(denied.status, 403);
+});
+
 test('WBS: subtasks nest and reparenting rejects cycles', async () => {
   const parent = await request(app).post(`/api/projects/${projectId}/tasks`).set(auth(pmToken))
     .send({ title: 'WBS parent' });
