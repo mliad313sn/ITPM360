@@ -73,7 +73,25 @@ Info "Running the ITPM360 installer (Node.js, PostgreSQL, build, services)…"
 $env:ITPM_DB_PASSWORD = $DbPassword
 & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Repo 'installer\scripts\Install-ITPM360.ps1') `
     -InPlace -AppSource $Repo -InstallDir $Repo -DbPassword $DbPassword -ApiPort $ApiPort -WebPort $WebPort
+if ($LASTEXITCODE -ne 0) { throw "The installer reported an error (exit $LASTEXITCODE). See $Repo\install.log." }
 $env:ITPM_DB_PASSWORD = $null
+
+# --- desktop shortcuts (all-users desktop, visible to Mohamed) -------------
+Info "Creating shortcuts…"
+try {
+  $desktop = [Environment]::GetFolderPath('CommonDesktopDirectory')
+  $ws = New-Object -ComObject WScript.Shell
+  $app = $ws.CreateShortcut((Join-Path $desktop 'ITPM360.lnk'))
+  $app.TargetPath   = "$env:SystemRoot\System32\cmd.exe"
+  $app.Arguments    = "/c start http://localhost:$WebPort"
+  $app.IconLocation = "$env:SystemRoot\System32\shell32.dll,14"
+  $app.Description  = "Open ITPM360"
+  $app.Save()
+  $dir = $ws.CreateShortcut((Join-Path $desktop 'ITPM360 Project Folder.lnk'))
+  $dir.TargetPath = $Repo
+  $dir.Save()
+  Ok "Desktop shortcuts created (ITPM360 + project folder)"
+} catch { Write-Host "  (shortcut creation skipped: $($_.Exception.Message))" -ForegroundColor Yellow }
 
 Write-Host ""
 Ok "ITPM360 installed at $Repo"
