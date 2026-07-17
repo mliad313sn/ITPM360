@@ -21,3 +21,6 @@ next-env.d.ts
 installer/stage/
 installer/*.exe
 installer/build.env
+
+# Runtime process output
+*.out
