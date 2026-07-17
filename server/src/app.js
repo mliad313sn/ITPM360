@@ -14,6 +14,7 @@ import taskRoutes from './routes/tasks.js';
 import grcRoutes from './routes/grc.js';
 import riskRoutes from './routes/risks.js';
 import timeRoutes from './routes/time.js';
+import costRoutes from './routes/costs.js';
 import meetingRoutes from './routes/meetings.js';
 import dashboardRoutes from './routes/dashboard.js';
 import capacityRoutes from './routes/capacity.js';
@@ -61,6 +62,7 @@ export function createApp() {
   app.use('/api', requireAuth, grcRoutes);
   app.use('/api', requireAuth, riskRoutes);
   app.use('/api', requireAuth, timeRoutes);
+  app.use('/api', requireAuth, costRoutes);
   app.use('/api', requireAuth, meetingRoutes);
   app.use('/api/dashboard', requireAuth, dashboardRoutes);
   app.use('/api/capacity', requireAuth, capacityRoutes);

@@ -310,6 +310,63 @@ async function seed() {
     }
   }
 
+  // Cost breakdown line items (planned vs actual by category)
+  const costDefs = [
+    { project: 'ERP Cloud Migration', lines: [
+      ['services', 'Migration partner (SI)', 400000, 250000],
+      ['software', 'Cloud ERP subscription', 240000, 140000],
+      ['labour', 'Internal project team', 150000, 110000],
+      ['contingency', 'Risk reserve', 60000, 20000],
+    ] },
+    { project: 'Data Warehouse Consolidation', lines: [
+      ['software', 'Lakehouse platform', 500000, 120000],
+      ['services', 'Data engineering consultancy', 450000, 90000],
+      ['labour', 'Internal analysts', 250000, 40000],
+    ] },
+    { project: 'Zero-Trust Network Rollout', lines: [
+      ['hardware', 'Network appliances', 200000, 160000],
+      ['software', 'Identity & policy platform', 120000, 90000],
+      ['labour', 'Security engineering', 100000, 60000],
+    ] },
+  ];
+  for (const c of costDefs) {
+    for (const [cat, label, planned, actual] of c.lines) {
+      await query(
+        `INSERT INTO cost_lines (project_id, category, label, planned_amount, actual_amount)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [projects[c.project], cat, label, planned, actual]
+      );
+    }
+  }
+
+  // Synthetic historical EVM snapshots so the S-curve renders (monthly, start→now)
+  const smoothstep = (x) => x * x * (3 - 2 * x); // gentle S-shape
+  for (const p of projectDefs) {
+    if (!p.budget || !p.start || !p.end) continue;
+    const start = new Date(p.start);
+    const end = new Date(p.end);
+    const now = new Date();
+    const perf = p.rag === 'red' ? 0.68 : p.rag === 'amber' ? 0.82 : 1.02; // EV vs plan
+    const cpiTarget = p.actual && p.budget ? Math.max(0.5, (p.budget * 0.3) / Math.max(p.actual, 1)) : 0.9;
+    const cursor = new Date(start);
+    while (cursor <= now && cursor <= end) {
+      const sr = Math.max(0, Math.min(1, (cursor - start) / (end - start)));
+      const pvR = smoothstep(sr);
+      const evR = Math.min(1, smoothstep(sr) * perf);
+      const pv = p.budget * pvR;
+      const ev = p.budget * evR;
+      const ac = ev > 0 ? ev / cpiTarget : 0;
+      await query(
+        `INSERT INTO evm_snapshots (project_id, captured_on, pv, ev, ac, spi, cpi, percent_complete)
+         VALUES ($1, $2::date, $3, $4, $5, $6, $7, $8) ON CONFLICT DO NOTHING`,
+        [projects[p.name], cursor.toISOString().slice(0, 10),
+         pv.toFixed(2), ev.toFixed(2), ac.toFixed(2),
+         pv > 0 ? (ev / pv).toFixed(3) : null, ac > 0 ? (ev / ac).toFixed(3) : null, (evR * 100).toFixed(1)]
+      );
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+  }
+
   console.log('Seed complete.');
   console.log(`Login with any seeded user / password: ${PASSWORD}`);
   console.log(userDefs.map((u) => `  ${u.email} — ${u.roles.map(([r, b]) => b ? `${r}@${b}` : r).join(', ')}`).join('\n'));

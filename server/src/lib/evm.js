@@ -77,6 +77,32 @@ export function riskHealth(highRiskCount) {
   return 'green';
 }
 
+// Capture today's EVM point for every project (idempotent per day) — the
+// S-curve's data source. Called daily by the scanner.
+export async function captureEvmSnapshots() {
+  const { rows: projects } = await query(
+    'SELECT id, budget, actual_cost, start_date, end_date FROM projects'
+  );
+  let captured = 0;
+  for (const p of projects) {
+    const { rows: tasks } = await query(
+      'SELECT percent_complete, estimate_hours FROM tasks WHERE project_id = $1',
+      [p.id]
+    );
+    const e = computeEvm({ ...p, tasks });
+    await query(
+      `INSERT INTO evm_snapshots (project_id, captured_on, pv, ev, ac, spi, cpi, percent_complete)
+       VALUES ($1, CURRENT_DATE, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (project_id, captured_on)
+       DO UPDATE SET pv = EXCLUDED.pv, ev = EXCLUDED.ev, ac = EXCLUDED.ac,
+                     spi = EXCLUDED.spi, cpi = EXCLUDED.cpi, percent_complete = EXCLUDED.percent_complete`,
+      [p.id, e.pv, e.ev, e.ac, e.spi, e.cpi, e.percent_complete]
+    );
+    captured++;
+  }
+  return captured;
+}
+
 export async function projectEvm(projectId, project) {
   const p =
     project ??

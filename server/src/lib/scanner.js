@@ -1,5 +1,6 @@
 import { query } from '../db.js';
 import { notifyUsers } from './notify.js';
+import { captureEvmSnapshots } from './evm.js';
 
 // Periodic scan: warn assignees about tasks due within 3 days (or overdue),
 // and PMs about GRC checkpoints due within 7 days. Deduplicates by skipping
@@ -57,12 +58,14 @@ export async function runDeadlineScan() {
   return created;
 }
 
+async function tick() {
+  await runDeadlineScan().catch((err) => console.error('deadline scan failed:', err.message));
+  await captureEvmSnapshots().catch((err) => console.error('evm snapshot failed:', err.message));
+}
+
 export function startDeadlineScanner(intervalMs = 60 * 60 * 1000) {
-  runDeadlineScan().catch((err) => console.error('deadline scan failed:', err.message));
-  const timer = setInterval(
-    () => runDeadlineScan().catch((err) => console.error('deadline scan failed:', err.message)),
-    intervalMs
-  );
+  tick();
+  const timer = setInterval(tick, intervalMs);
   timer.unref();
   return timer;
 }

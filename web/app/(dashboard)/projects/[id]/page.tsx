@@ -13,9 +13,11 @@ import { RisksSection } from '@/components/risks-section';
 import { MeetingsSection } from '@/components/meetings-section';
 import { EvmPanel } from '@/components/evm';
 import { CharterSection } from '@/components/charter-section';
+import { FinancialsSection } from '@/components/financials-section';
 import {
   canManageBranch, canManageProject,
-  type Branch, type Evm, type GrcCheckpoint, type Meeting, type Project, type Rag, type Risk, type Task, type UserRow,
+  type Branch, type CostBreakdown, type Evm, type EvmSnapshot, type GrcCheckpoint, type Meeting,
+  type Project, type Rag, type Risk, type Task, type UserRow,
 } from '@/lib/types';
 import {
   Button, Field, Modal, RagBadge, Select, Input, Spinner, StatusBadge, ErrorNote,
@@ -41,6 +43,8 @@ export default function ProjectDetailPage() {
   const [checkpoints, setCheckpoints] = useState<GrcCheckpoint[]>([]);
   const [risks, setRisks] = useState<Risk[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [costs, setCosts] = useState<CostBreakdown | null>(null);
+  const [snapshots, setSnapshots] = useState<EvmSnapshot[]>([]);
   const [editing, setEditing] = useState(false);
   const [addingMember, setAddingMember] = useState(false);
   const [memberForm, setMemberForm] = useState({ user_id: '', member_role: 'member' });
@@ -52,6 +56,8 @@ export default function ProjectDetailPage() {
     api<{ checkpoints: GrcCheckpoint[] }>(`/projects/${id}/grc`).then((d) => setCheckpoints(d.checkpoints));
     api<{ risks: Risk[] }>(`/projects/${id}/risks`).then((d) => setRisks(d.risks)).catch(() => {});
     api<{ meetings: Meeting[] }>(`/meetings?project_id=${id}`).then((d) => setMeetings(d.meetings));
+    api<CostBreakdown>(`/projects/${id}/costs`).then(setCosts).catch(() => {});
+    api<{ snapshots: EvmSnapshot[] }>(`/projects/${id}/evm-history`).then((d) => setSnapshots(d.snapshots)).catch(() => {});
   };
 
   const reloadProject = () =>
@@ -226,6 +232,8 @@ export default function ProjectDetailPage() {
           />
 
           <RisksSection project={project} risks={risks} users={users} canManage={canManage} onChanged={loadWork} />
+
+          <FinancialsSection project={project} breakdown={costs} snapshots={snapshots} canManage={canManage} onChanged={loadWork} />
 
           <GrcSection project={project} checkpoints={checkpoints} canManage={canManage} onChanged={loadWork} />
 

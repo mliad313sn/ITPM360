@@ -2,8 +2,9 @@
 
 import {
   ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis,
-  Tooltip, LabelList, CartesianGrid, Legend,
+  Tooltip, LabelList, CartesianGrid, Legend, LineChart, Line,
 } from 'recharts';
+import type { EvmSnapshot } from '@/lib/types';
 
 // Status colors (RAG is a state, not a series) — validated palette, always labeled
 export const RAG_COLORS = { green: '#0ca30c', amber: '#fab219', red: '#d03b3b' } as const;
@@ -71,6 +72,33 @@ export function StatusBars({ data }: { data: { name: string; value: number }[] }
             <LabelList dataKey="value" position="top" style={{ fontSize: 11, fill: '#52514e' }} />
           </Bar>
         </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+// EVM S-curve: cumulative Planned Value, Earned Value and Actual Cost over time.
+export function SCurve({ snapshots }: { snapshots: EvmSnapshot[] }) {
+  const data = snapshots.map((s) => ({
+    date: new Date(s.captured_on).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+    PV: s.pv == null ? null : Number(s.pv),
+    EV: s.ev == null ? null : Number(s.ev),
+    AC: s.ac == null ? null : Number(s.ac),
+  }));
+  const compact = (v: number) => v.toLocaleString(undefined, { notation: 'compact', maximumFractionDigits: 1 });
+  return (
+    <div className="h-64">
+      <ResponsiveContainer>
+        <LineChart data={data} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}>
+          <CartesianGrid vertical={false} stroke={GRID} strokeWidth={1} />
+          <XAxis dataKey="date" tick={{ fontSize: 11, fill: INK_MUTED }} axisLine={{ stroke: '#c3c2b7' }} tickLine={false} />
+          <YAxis tickFormatter={compact} tick={{ fontSize: 11, fill: INK_MUTED }} axisLine={false} tickLine={false} width={44} />
+          <Tooltip contentStyle={tooltipStyle} />
+          <Legend iconType="plainline" formatter={(v: string) => <span style={{ color: '#52514e', fontSize: 12 }}>{v}</span>} />
+          <Line type="monotone" dataKey="PV" name="Planned value" stroke="#2a78d6" strokeWidth={2} dot={false} />
+          <Line type="monotone" dataKey="EV" name="Earned value" stroke="#0ca30c" strokeWidth={2} dot={false} />
+          <Line type="monotone" dataKey="AC" name="Actual cost" stroke="#d03b3b" strokeWidth={2} dot={false} strokeDasharray="5 3" />
+        </LineChart>
       </ResponsiveContainer>
     </div>
   );

@@ -175,6 +175,33 @@ export interface PortfolioRow {
   cost_health: Health;
 }
 
+export type CostCategory = 'labour' | 'hardware' | 'software' | 'services' | 'contingency' | 'other';
+
+export interface CostLine {
+  id: string;
+  project_id: string;
+  category: CostCategory;
+  label: string;
+  planned_amount: string;
+  actual_amount: string;
+}
+
+export interface CostBreakdown {
+  cost_lines: CostLine[];
+  by_category: Record<CostCategory, { planned: number; actual: number }>;
+  totals: { planned: number; actual: number };
+}
+
+export interface EvmSnapshot {
+  captured_on: string;
+  pv: string | null;
+  ev: string | null;
+  ac: string | null;
+  spi: string | null;
+  cpi: string | null;
+  percent_complete: string | null;
+}
+
 export interface CapacityPerson {
   user_id: string;
   full_name: string;

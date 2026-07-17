@@ -243,6 +243,33 @@ test('EVM: project exposes earned-value metrics and portfolio rollup', async () 
   assert.equal(done.body.task.percent_complete, 100);
 });
 
+test('cost breakdown: line items aggregate by category', async () => {
+  await request(app).post(`/api/projects/${projectId}/costs`).set(auth(pmToken))
+    .send({ category: 'software', label: 'Licenses', planned_amount: 1000, actual_amount: 600 });
+  await request(app).post(`/api/projects/${projectId}/costs`).set(auth(pmToken))
+    .send({ category: 'software', label: 'Support', planned_amount: 500, actual_amount: 700 });
+
+  const res = await request(app).get(`/api/projects/${projectId}/costs`).set(auth(pmToken));
+  assert.equal(res.status, 200);
+  assert.equal(res.body.by_category.software.planned, 1500);
+  assert.equal(res.body.by_category.software.actual, 1300);
+  assert.equal(res.body.totals.actual, 1300);
+
+  // viewer of another branch cannot read
+  const denied = await request(app).get(`/api/projects/${projectId}/costs`).set(auth(viewerToken));
+  assert.equal(denied.status, 403);
+});
+
+test('EVM snapshots capture and expose S-curve history', async () => {
+  const { captureEvmSnapshots } = await import('../src/lib/evm.js');
+  const n = await captureEvmSnapshots();
+  assert.ok(n >= 1);
+  const hist = await request(app).get(`/api/projects/${projectId}/evm-history`).set(auth(pmToken));
+  assert.equal(hist.status, 200);
+  assert.ok(hist.body.snapshots.length >= 1);
+  assert.ok('pv' in hist.body.snapshots[0] && 'ev' in hist.body.snapshots[0]);
+});
+
 test('project charter fields persist via PATCH', async () => {
   const res = await request(app).patch(`/api/projects/${projectId}`).set(auth(pmToken))
     .send({
