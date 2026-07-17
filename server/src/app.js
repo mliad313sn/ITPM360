@@ -16,6 +16,7 @@ import riskRoutes from './routes/risks.js';
 import timeRoutes from './routes/time.js';
 import meetingRoutes from './routes/meetings.js';
 import dashboardRoutes from './routes/dashboard.js';
+import capacityRoutes from './routes/capacity.js';
 import reportRoutes from './routes/reports.js';
 import notificationRoutes from './routes/notifications.js';
 import webhookRoutes from './routes/webhooks.js';
@@ -62,6 +63,7 @@ export function createApp() {
   app.use('/api', requireAuth, timeRoutes);
   app.use('/api', requireAuth, meetingRoutes);
   app.use('/api/dashboard', requireAuth, dashboardRoutes);
+  app.use('/api/capacity', requireAuth, capacityRoutes);
   app.use('/api/reports', requireAuth, reportRoutes);
   app.use('/api/notifications', requireAuth, notificationRoutes);
   app.use('/api/webhooks', requireAuth, webhookRoutes);

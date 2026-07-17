@@ -86,7 +86,8 @@ estimate-weighted % complete), **PV** (budget × schedule elapsed), **SV/SPI**,
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/dashboard/summary` (`?branch_id=`) | RAG/status/task distributions, per-country health, 14-day deadlines |
+| GET | `/dashboard/summary` (`?branch_id=`) | RAG/status/task distributions, per-country health, 14-day deadlines, EVM portfolio rollup + KPIs |
+| GET | `/capacity` (`?weeks=4..16`) | per-person remaining workload bucketed by due-week vs `weekly_capacity_hours`; flags over-allocation |
 | GET | `/reports/monthly?month=YYYY-MM[&branch_id=]` | PowerPoint (.pptx) download |
 | GET | `/export/projects\|tasks\|audit-logs?format=csv\|json` | scoped; audit-logs admin-only |
 | GET | `/search?q=` | projects/tasks/meetings, scoped |

@@ -243,6 +243,23 @@ test('EVM: project exposes earned-value metrics and portfolio rollup', async () 
   assert.equal(done.body.task.percent_complete, 100);
 });
 
+test('capacity: aggregates remaining workload per assignee and flags over-allocation', async () => {
+  // Set the PM's weekly capacity low, then assign an oversized estimated task due this week
+  await request(app).patch(`/api/users/${pmId}`).set(auth(adminToken))
+    .send({ weekly_capacity_hours: 10 });
+  await request(app).post(`/api/projects/${projectId}/tasks`).set(auth(pmToken))
+    .send({ title: 'Heavy load', assignee_id: pmId, estimate_hours: 40, percent_complete: 0, due_date: '2030-06-05' });
+
+  const cap = await request(app).get('/api/capacity?weeks=8&now=2030-06-03').set(auth(adminToken));
+  assert.equal(cap.status, 200);
+  assert.equal(cap.body.week_starts.length, 8);
+  const pm = cap.body.people.find((p) => p.user_id === pmId);
+  assert.ok(pm, 'PM appears in capacity');
+  assert.equal(pm.weekly_capacity, 10);
+  assert.ok(pm.total_remaining >= 40);
+  assert.ok(pm.overallocated_weeks >= 1, 'over-allocation detected against 10h capacity');
+});
+
 test('CSV export streams scoped data with headers', async () => {
   const res = await request(app).get('/api/export/projects?format=csv').set(auth(adminToken));
   assert.equal(res.status, 200);

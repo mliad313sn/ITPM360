@@ -170,6 +170,26 @@ export interface PortfolioRow {
   cost_health: Health;
 }
 
+export interface CapacityPerson {
+  user_id: string;
+  full_name: string;
+  job_title: string | null;
+  weekly_capacity: number;
+  weeks: number[];
+  unscheduled_hours: number;
+  beyond_horizon_hours: number;
+  open_tasks: number;
+  total_remaining: number;
+  logged_recent: number;
+  peak_utilization: number | null;
+  overallocated_weeks: number;
+}
+
+export interface CapacityData {
+  week_starts: string[];
+  people: CapacityPerson[];
+}
+
 export interface TimeEntry {
   id: string;
   task_id: string;

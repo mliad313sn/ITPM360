@@ -163,6 +163,10 @@ async function seed() {
     );
   }
 
+  // Capacity variety (part-timers + a stretched PM) for the workload heatmap
+  await query(`UPDATE users SET weekly_capacity_hours = 32 WHERE email = 'dana.kim@itpm360.dev'`);
+  await query(`UPDATE users SET weekly_capacity_hours = 20 WHERE email = 'lena.mueller@itpm360.dev'`);
+
   // Progress variety so the EVM control table shows a green/amber/red mix
   await query(`UPDATE tasks SET percent_complete = 82 WHERE title = 'Schema harmonization for sales data'`);
   await query(`UPDATE tasks SET percent_complete = 55 WHERE title = 'Finance module pilot migration'`);
@@ -172,6 +176,11 @@ async function seed() {
                WHERE title = 'Cutover runbook and rollback plan'`);
   await query(`UPDATE tasks SET estimate_hours = 120 WHERE title = 'Finance module pilot migration'`);
   await query(`UPDATE tasks SET estimate_hours = 24 WHERE title = 'Vendor contract renewal for middleware'`);
+  // Estimates on the remaining open tasks so the capacity heatmap is populated
+  await query(`UPDATE tasks SET estimate_hours = 48 WHERE title = 'Identity provider consolidation'`);
+  await query(`UPDATE tasks SET estimate_hours = 64 WHERE title = 'Network micro-segmentation pilot (floor 3)'`);
+  await query(`UPDATE tasks SET estimate_hours = 80 WHERE title = 'Schema harmonization for sales data'`);
+  await query(`UPDATE tasks SET estimate_hours = 40 WHERE title = 'DR site network provisioning'`);
   await query(
     `INSERT INTO task_dependencies (task_id, depends_on_task_id)
      SELECT a.id, b.id FROM tasks a, tasks b

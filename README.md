@@ -17,6 +17,8 @@ Enterprise IT project management for a global organization: countries → branch
 - **Earned Value Management** — SPI, CPI, SV, CV, EAC, VAC per project from budget,
   actual cost and estimate-weighted progress; portfolio control table with SPI/CPI
   health dots; multi-dimensional health (on time / on budget / scope)
+- **Resource & capacity** — per-person workload heatmap (remaining hours by due-week
+  vs weekly availability) with over-allocation detection and editable capacities
 - **Meeting Hub** — agendas auto-built from live project data (RAG, blockers with
   reasons, next steps, overdue work, open GRC gates), frozen as a permanent record on completion
 - **Dashboards** — global executive and branch-level views; RAG donut, status and

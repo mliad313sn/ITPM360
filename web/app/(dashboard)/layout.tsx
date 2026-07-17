@@ -35,6 +35,14 @@ const icons = {
     </>
   ),
   reports: <path d="M4 20V10m5.5 10V4m5.5 16v-8m5 8V7" />,
+  capacity: (
+    <>
+      <path d="M3 3v18h18" />
+      <rect x="7" y="12" width="3" height="6" rx="0.5" />
+      <rect x="12" y="8" width="3" height="10" rx="0.5" />
+      <rect x="17" y="5" width="3" height="13" rx="0.5" />
+    </>
+  ),
   integrations: <path d="M9 2v6m6-6v6M5 8h14v4a7 7 0 0 1-14 0zM12 19v3" />,
   audit: (
     <>
@@ -60,6 +68,7 @@ const NAV: NavGroup[] = [
     items: [
       { href: '/projects', label: 'Projects', icon: icons.projects },
       { href: '/meetings', label: 'Meetings', icon: icons.meetings },
+      { href: '/capacity', label: 'Capacity', icon: icons.capacity },
       { href: '/reports', label: 'Reports & Export', icon: icons.reports },
     ],
   },

@@ -11,7 +11,7 @@ const ROLES = ['global_admin', 'branch_manager', 'project_manager', 'viewer'];
 // Any authenticated user may list users (needed for PM/member/assignee pickers)
 router.get('/', async (_req, res) => {
   const { rows } = await query(
-    `SELECT u.id, u.email, u.full_name, u.job_title, u.is_active, u.created_at,
+    `SELECT u.id, u.email, u.full_name, u.job_title, u.is_active, u.created_at, u.weekly_capacity_hours,
             COALESCE(json_agg(json_build_object('id', r.id, 'role', r.role, 'branch_id', r.branch_id, 'branch_name', b.name))
                      FILTER (WHERE r.id IS NOT NULL), '[]') AS roles
      FROM users u
@@ -50,11 +50,15 @@ router.patch('/:id', requireGlobalAdmin, async (req, res) => {
     full_name: req.body?.full_name?.trim() || existing[0].full_name,
     job_title: req.body?.job_title !== undefined ? req.body.job_title?.trim() || null : existing[0].job_title,
     is_active: typeof req.body?.is_active === 'boolean' ? req.body.is_active : existing[0].is_active,
+    weekly_capacity_hours:
+      req.body?.weekly_capacity_hours !== undefined && Number(req.body.weekly_capacity_hours) >= 0
+        ? Number(req.body.weekly_capacity_hours)
+        : existing[0].weekly_capacity_hours,
   };
   const { rows } = await query(
-    `UPDATE users SET full_name = $1, job_title = $2, is_active = $3
-     WHERE id = $4 RETURNING id, email, full_name, job_title, is_active`,
-    [next.full_name, next.job_title, next.is_active, req.params.id]
+    `UPDATE users SET full_name = $1, job_title = $2, is_active = $3, weekly_capacity_hours = $4
+     WHERE id = $5 RETURNING id, email, full_name, job_title, is_active, weekly_capacity_hours`,
+    [next.full_name, next.job_title, next.is_active, next.weekly_capacity_hours, req.params.id]
   );
   await logAudit(req, 'update', 'user', req.params.id, {
     before: { full_name: existing[0].full_name, job_title: existing[0].job_title, is_active: existing[0].is_active },
