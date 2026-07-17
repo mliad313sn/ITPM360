@@ -16,3 +16,8 @@ npm-debug.log*
 .vscode/
 *.tsbuildinfo
 next-env.d.ts
+
+# Installer build artifacts and local secrets
+installer/stage/
+installer/*.exe
+installer/build.env
