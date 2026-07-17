@@ -32,7 +32,7 @@ export default function Home() {
       <header className="space-y-4">
         <span className="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">
           <span className="h-2 w-2 rounded-full bg-indigo-500" />
-          Phase 1 — Foundation
+          Enterprise IT portfolio management
         </span>
         <h1 className="text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">
           ITPM<span className="text-indigo-600">360</span>
@@ -41,6 +41,12 @@ export default function Home() {
           Enterprise IT project management across countries and branches — with role-based access,
           GRC governance, meeting alignment and executive reporting.
         </p>
+        <a
+          href="/login"
+          className="inline-flex items-center rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-indigo-500"
+        >
+          Sign in →
+        </a>
       </header>
 
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

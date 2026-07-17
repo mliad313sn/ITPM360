@@ -35,8 +35,13 @@ cd server
 cp .env.example .env   # adjust DATABASE_URL if needed
 npm install
 npm run migrate        # applies migrations/*.sql
+npm run seed           # demo data — all users share password: Password123!
 npm run dev            # http://localhost:4000
 ```
+
+Seeded logins: `admin@itpm360.dev` (Global Admin), `lena.mueller@itpm360.dev` (Branch
+Manager DE-BER), `raj.patel@itpm360.dev` (PM DE-BER/DE-MUC), `sofia.garcia@itpm360.dev`
+(PM US-NYC), `wei.tan@itpm360.dev` (BM+PM SG-SIN), `dana.kim@itpm360.dev` (Viewer).
 
 ### 3. Frontend
 
@@ -49,7 +54,7 @@ npm run dev            # http://localhost:3000
 ## Development phases
 
 - [x] **Phase 1** — Backend init, PostgreSQL schema proposal, frontend boilerplate
-- [ ] **Phase 2** — CRUD endpoints + UI: Countries, Branches, Users, Projects
+- [x] **Phase 2** — CRUD endpoints + UI: Countries, Branches, Users, Projects
 - [ ] **Phase 3** — Tasks, blocker mechanics, Meeting Hub
 - [ ] **Phase 4** — Dashboards (Gantt, Kanban, status charts), monthly slide report generator
 - [ ] **Phase 5** — Notification engine, webhooks, UI polish

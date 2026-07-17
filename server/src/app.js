@@ -1,6 +1,13 @@
 import express from 'express';
 import cors from 'cors';
-import { pool } from './db.js';
+import { pool, query } from './db.js';
+import { requireAuth } from './middleware/auth.js';
+import { requireGlobalAdmin } from './lib/rbac.js';
+import authRoutes from './routes/auth.js';
+import countryRoutes from './routes/countries.js';
+import branchRoutes from './routes/branches.js';
+import userRoutes from './routes/users.js';
+import projectRoutes from './routes/projects.js';
 
 export function createApp() {
   const app = express();
@@ -17,9 +24,30 @@ export function createApp() {
     }
   });
 
-  // Phase 2+: route modules mount here (countries, branches, users, projects, ...)
+  app.use('/api/auth', authRoutes);
+  app.use('/api/countries', requireAuth, countryRoutes);
+  app.use('/api/branches', requireAuth, branchRoutes);
+  app.use('/api/users', requireAuth, userRoutes);
+  app.use('/api/projects', requireAuth, projectRoutes);
+
+  app.get('/api/audit-logs', requireAuth, requireGlobalAdmin, async (req, res) => {
+    const limit = Math.min(Number(req.query.limit) || 100, 500);
+    const { rows } = await query(
+      `SELECT a.*, u.full_name AS actor_name
+       FROM audit_logs a LEFT JOIN users u ON u.id = a.actor_id
+       ORDER BY a.created_at DESC LIMIT $1`,
+      [limit]
+    );
+    res.json({ audit_logs: rows });
+  });
 
   app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
+
+  // eslint-disable-next-line no-unused-vars
+  app.use((err, _req, res, _next) => {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  });
 
   return app;
 }
