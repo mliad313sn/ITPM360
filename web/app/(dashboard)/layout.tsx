@@ -30,12 +30,14 @@ const icons = {
       <path d="M8 3v4M16 3v4M3 10h18" />
     </>
   ),
+  reports: <path d="M4 20V10m5.5 10V4m5.5 16v-8m5 8V7" />,
 };
 
 const nav = [
   { href: '/dashboard', label: 'Dashboard', icon: icons.dashboard },
   { href: '/projects', label: 'Projects', icon: icons.projects },
   { href: '/meetings', label: 'Meetings', icon: icons.meetings },
+  { href: '/reports', label: 'Reports', icon: icons.reports },
   { href: '/countries', label: 'Countries', icon: icons.countries },
   { href: '/branches', label: 'Branches', icon: icons.branches },
   { href: '/users', label: 'Users', icon: icons.users },

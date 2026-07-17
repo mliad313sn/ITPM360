@@ -55,6 +55,6 @@ npm run dev            # http://localhost:3000
 
 - [x] **Phase 1** — Backend init, PostgreSQL schema proposal, frontend boilerplate
 - [x] **Phase 2** — CRUD endpoints + UI: Countries, Branches, Users, Projects
-- [ ] **Phase 3** — Tasks, blocker mechanics, Meeting Hub
-- [ ] **Phase 4** — Dashboards (Gantt, Kanban, status charts), monthly slide report generator
+- [x] **Phase 3** — Tasks, blocker mechanics, Meeting Hub
+- [x] **Phase 4** — Dashboards (Gantt, Kanban, status charts), monthly slide report generator
 - [ ] **Phase 5** — Notification engine, webhooks, UI polish

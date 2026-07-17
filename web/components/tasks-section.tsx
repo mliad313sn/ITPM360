@@ -5,6 +5,8 @@ import { api, ApiError } from '@/lib/api';
 import type { Task, TaskPriority, TaskStatus, UserRow, Project } from '@/lib/types';
 import { Button, Modal, Field, Input, Select, Textarea, ErrorNote, EmptyState, cx, formatDate } from '@/components/ui';
 import { TaskStatusBadge, PriorityLabel, taskStatusLabels } from '@/components/task-badges';
+import { KanbanBoard } from '@/components/kanban';
+import { GanttChart } from '@/components/gantt';
 
 const emptyForm = {
   title: '', description: '', assignee_id: '', status: 'todo' as TaskStatus,
@@ -28,8 +30,9 @@ export function TasksSection({
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [view, setView] = useState<'list' | 'board' | 'timeline'>('list');
 
-  function open(t: Task | 'new') {
+  function open(t: Task | 'new', statusOverride?: TaskStatus) {
     setForm(
       t === 'new'
         ? emptyForm
@@ -37,7 +40,7 @@ export function TasksSection({
             title: t.title,
             description: t.description ?? '',
             assignee_id: t.assignee_id ?? '',
-            status: t.status,
+            status: statusOverride ?? t.status,
             priority: t.priority,
             start_date: t.start_date?.slice(0, 10) ?? '',
             due_date: t.due_date?.slice(0, 10) ?? '',
@@ -90,17 +93,57 @@ export function TasksSection({
   const isOverdue = (t: Task) =>
     t.due_date && t.status !== 'done' && new Date(t.due_date) < new Date(new Date().toDateString());
 
+  // Kanban move: entering 'blocked' requires an explanation → route through the modal
+  async function moveTask(t: Task, status: TaskStatus) {
+    if (status === 'blocked') {
+      open(t, 'blocked');
+      return;
+    }
+    try {
+      await api(`/tasks/${t.id}`, { method: 'PATCH', body: JSON.stringify({ status }) });
+      onChanged();
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : 'Move failed');
+    }
+  }
+
+  const views = [
+    { key: 'list', label: 'List' },
+    { key: 'board', label: 'Board' },
+    { key: 'timeline', label: 'Timeline' },
+  ] as const;
+
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-5">
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
           Tasks ({tasks.length})
         </h2>
-        {canEdit && <Button variant="secondary" onClick={() => open('new')}>+ Add task</Button>}
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-lg border border-slate-200 p-0.5">
+            {views.map((v) => (
+              <button
+                key={v.key}
+                onClick={() => setView(v.key)}
+                className={cx(
+                  'rounded-md px-3 py-1 text-xs font-medium transition',
+                  view === v.key ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-slate-700'
+                )}
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
+          {canEdit && <Button variant="secondary" onClick={() => open('new')}>+ Add task</Button>}
+        </div>
       </div>
 
       {tasks.length === 0 ? (
         <EmptyState title="No tasks yet" hint="Break the project down into trackable work items." />
+      ) : view === 'board' ? (
+        <KanbanBoard tasks={tasks} canEdit={canEdit} onMove={moveTask} onOpen={(t) => open(t)} />
+      ) : view === 'timeline' ? (
+        <GanttChart tasks={tasks} />
       ) : (
         <div className="divide-y divide-slate-100">
           {tasks.map((t) => (
