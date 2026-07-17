@@ -243,6 +243,33 @@ test('EVM: project exposes earned-value metrics and portfolio rollup', async () 
   assert.equal(done.body.task.percent_complete, 100);
 });
 
+test('stakeholders and RACI matrix CRUD with RBAC', async () => {
+  const sh = await request(app).post(`/api/projects/${projectId}/stakeholders`).set(auth(pmToken))
+    .send({ name: 'CFO', title: 'Finance', influence: 3, interest: 3, engagement: 'Manage closely' });
+  assert.equal(sh.status, 201);
+  assert.equal(sh.body.stakeholder.influence, 3);
+
+  // out-of-range clamps to default (2)
+  const clamped = await request(app).post(`/api/projects/${projectId}/stakeholders`).set(auth(pmToken))
+    .send({ name: 'X', influence: 9 });
+  assert.equal(clamped.body.stakeholder.influence, 2);
+
+  const r1 = await request(app).post(`/api/projects/${projectId}/raci`).set(auth(pmToken))
+    .send({ activity: 'Cutover', user_id: pmId, assignment: 'accountable' });
+  assert.equal(r1.status, 201);
+  // upsert: same activity+user changes the assignment, no duplicate
+  await request(app).post(`/api/projects/${projectId}/raci`).set(auth(pmToken))
+    .send({ activity: 'Cutover', user_id: pmId, assignment: 'responsible' });
+  const list = await request(app).get(`/api/projects/${projectId}/raci`).set(auth(pmToken));
+  const cutover = list.body.raci.filter((r) => r.activity === 'Cutover');
+  assert.equal(cutover.length, 1);
+  assert.equal(cutover[0].assignment, 'responsible');
+
+  // viewer of another branch is denied
+  const denied = await request(app).get(`/api/projects/${projectId}/stakeholders`).set(auth(viewerToken));
+  assert.equal(denied.status, 403);
+});
+
 test('cost breakdown: line items aggregate by category', async () => {
   await request(app).post(`/api/projects/${projectId}/costs`).set(auth(pmToken))
     .send({ category: 'software', label: 'Licenses', planned_amount: 1000, actual_amount: 600 });

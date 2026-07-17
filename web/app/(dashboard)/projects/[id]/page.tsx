@@ -14,10 +14,11 @@ import { MeetingsSection } from '@/components/meetings-section';
 import { EvmPanel } from '@/components/evm';
 import { CharterSection } from '@/components/charter-section';
 import { FinancialsSection } from '@/components/financials-section';
+import { GovernanceSection } from '@/components/governance-section';
 import {
   canManageBranch, canManageProject,
   type Branch, type CostBreakdown, type Evm, type EvmSnapshot, type GrcCheckpoint, type Meeting,
-  type Project, type Rag, type Risk, type Task, type UserRow,
+  type Project, type Rag, type RaciEntry, type Risk, type Stakeholder, type Task, type UserRow,
 } from '@/lib/types';
 import {
   Button, Field, Modal, RagBadge, Select, Input, Spinner, StatusBadge, ErrorNote,
@@ -45,6 +46,8 @@ export default function ProjectDetailPage() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [costs, setCosts] = useState<CostBreakdown | null>(null);
   const [snapshots, setSnapshots] = useState<EvmSnapshot[]>([]);
+  const [stakeholders, setStakeholders] = useState<Stakeholder[]>([]);
+  const [raci, setRaci] = useState<RaciEntry[]>([]);
   const [editing, setEditing] = useState(false);
   const [addingMember, setAddingMember] = useState(false);
   const [memberForm, setMemberForm] = useState({ user_id: '', member_role: 'member' });
@@ -58,6 +61,8 @@ export default function ProjectDetailPage() {
     api<{ meetings: Meeting[] }>(`/meetings?project_id=${id}`).then((d) => setMeetings(d.meetings));
     api<CostBreakdown>(`/projects/${id}/costs`).then(setCosts).catch(() => {});
     api<{ snapshots: EvmSnapshot[] }>(`/projects/${id}/evm-history`).then((d) => setSnapshots(d.snapshots)).catch(() => {});
+    api<{ stakeholders: Stakeholder[] }>(`/projects/${id}/stakeholders`).then((d) => setStakeholders(d.stakeholders)).catch(() => {});
+    api<{ raci: RaciEntry[] }>(`/projects/${id}/raci`).then((d) => setRaci(d.raci)).catch(() => {});
   };
 
   const reloadProject = () =>
@@ -234,6 +239,8 @@ export default function ProjectDetailPage() {
           <RisksSection project={project} risks={risks} users={users} canManage={canManage} onChanged={loadWork} />
 
           <FinancialsSection project={project} breakdown={costs} snapshots={snapshots} canManage={canManage} onChanged={loadWork} />
+
+          <GovernanceSection project={project} stakeholders={stakeholders} raci={raci} users={users} canManage={canManage} onChanged={loadWork} />
 
           <GrcSection project={project} checkpoints={checkpoints} canManage={canManage} onChanged={loadWork} />
 

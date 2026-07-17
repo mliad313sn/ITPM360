@@ -175,6 +175,27 @@ export interface PortfolioRow {
   cost_health: Health;
 }
 
+export interface Stakeholder {
+  id: string;
+  project_id: string;
+  name: string;
+  title: string | null;
+  influence: number; // 1-3 (power)
+  interest: number; // 1-3
+  engagement: string | null;
+}
+
+export type RaciRole = 'responsible' | 'accountable' | 'consulted' | 'informed';
+
+export interface RaciEntry {
+  id: string;
+  project_id: string;
+  activity: string;
+  user_id: string;
+  full_name: string;
+  assignment: RaciRole;
+}
+
 export type CostCategory = 'labour' | 'hardware' | 'software' | 'services' | 'contingency' | 'other';
 
 export interface CostLine {

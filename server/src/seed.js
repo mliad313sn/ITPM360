@@ -178,6 +178,41 @@ async function seed() {
     ]
   );
 
+  // Stakeholder register (power/interest) for the flagship project
+  const erp = projects['ERP Cloud Migration'];
+  const stakeholderDefs = [
+    ['CFO (Executive Sponsor)', 'Finance', 3, 3, 'Chairs the steering committee; wants weekly RAG + budget variance.'],
+    ['Head of Finance Ops', 'Finance', 2, 3, 'Owns UAT sign-off; engage closely through the parallel run.'],
+    ['CISO', 'Security', 3, 2, 'Approves the GRC gates; keep satisfied with compliance evidence.'],
+    ['Works Council', 'HR', 2, 1, 'Consulted on process changes; keep informed of timeline.'],
+    ['End-user community', 'Operations', 1, 2, 'Keep informed via change comms and training.'],
+  ];
+  for (const [name, title, influence, interest, engagement] of stakeholderDefs) {
+    await query(
+      `INSERT INTO stakeholders (project_id, name, title, influence, interest, engagement)
+       VALUES ($1,$2,$3,$4,$5,$6)`,
+      [erp, name, title, influence, interest, engagement]
+    );
+  }
+
+  // RACI matrix for key activities
+  const raciDefs = [
+    ['Data migration & reconciliation', 'raj.patel@itpm360.dev', 'accountable'],
+    ['Data migration & reconciliation', 'dana.kim@itpm360.dev', 'responsible'],
+    ['Data migration & reconciliation', 'lena.mueller@itpm360.dev', 'informed'],
+    ['UAT & sign-off', 'lena.mueller@itpm360.dev', 'accountable'],
+    ['UAT & sign-off', 'raj.patel@itpm360.dev', 'consulted'],
+    ['Cutover & go-live', 'raj.patel@itpm360.dev', 'accountable'],
+    ['Cutover & go-live', 'dana.kim@itpm360.dev', 'responsible'],
+    ['Cutover & go-live', 'admin@itpm360.dev', 'informed'],
+  ];
+  for (const [activity, email, assignment] of raciDefs) {
+    await query(
+      `INSERT INTO raci_entries (project_id, activity, user_id, assignment) VALUES ($1,$2,$3,$4)`,
+      [erp, activity, users[email], assignment]
+    );
+  }
+
   // Capacity variety (part-timers + a stretched PM) for the workload heatmap
   await query(`UPDATE users SET weekly_capacity_hours = 32 WHERE email = 'dana.kim@itpm360.dev'`);
   await query(`UPDATE users SET weekly_capacity_hours = 20 WHERE email = 'lena.mueller@itpm360.dev'`);
