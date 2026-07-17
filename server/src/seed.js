@@ -161,6 +161,23 @@ async function seed() {
     );
   }
 
+  // PM extras: milestones, estimates, one dependency chain and a comment
+  await query(`UPDATE tasks SET is_milestone = true, estimate_hours = 16
+               WHERE title = 'Cutover runbook and rollback plan'`);
+  await query(`UPDATE tasks SET estimate_hours = 120 WHERE title = 'Finance module pilot migration'`);
+  await query(`UPDATE tasks SET estimate_hours = 24 WHERE title = 'Vendor contract renewal for middleware'`);
+  await query(
+    `INSERT INTO task_dependencies (task_id, depends_on_task_id)
+     SELECT a.id, b.id FROM tasks a, tasks b
+     WHERE a.title = 'Cutover runbook and rollback plan' AND b.title = 'Finance module pilot migration'`
+  );
+  await query(
+    `INSERT INTO task_comments (task_id, author_id, body)
+     SELECT t.id, $1, 'Legal confirmed the MSA review is queued for next week — keeping this red until countersigned.'
+     FROM tasks t WHERE t.title = 'Vendor contract renewal for middleware'`,
+    [users['lena.mueller@itpm360.dev']]
+  );
+
   // GRC checkpoints
   const grcDefs = [
     { project: 'ERP Cloud Migration', type: 'compliance', title: 'GDPR data-transfer impact assessment',

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { useMe } from '@/components/auth-context';
+import { useFeedback } from '@/components/feedback';
 import { isGlobalAdmin, type Branch, type RoleName, type UserRow } from '@/lib/types';
 import {
   PageHeader, Spinner, Button, Modal, Field, Input, Select, ErrorNote, RoleChip, roleLabels, cx,
@@ -13,6 +14,7 @@ const ROLE_OPTIONS: RoleName[] = ['global_admin', 'branch_manager', 'project_man
 
 export default function UsersPage() {
   const me = useMe();
+  const { toast } = useFeedback();
   const admin = isGlobalAdmin(me);
   const [users, setUsers] = useState<UserRow[] | null>(null);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -73,9 +75,10 @@ export default function UsersPage() {
   async function removeRole(user: UserRow, roleId: string) {
     try {
       await api(`/users/${user.id}/roles/${roleId}`, { method: 'DELETE' });
+      toast('success', 'Role removed');
       await load();
     } catch (err) {
-      alert(err instanceof ApiError ? err.message : 'Remove failed');
+      toast('error', err instanceof ApiError ? err.message : 'Remove failed');
     }
   }
 

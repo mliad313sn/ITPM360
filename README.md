@@ -2,6 +2,24 @@
 
 Enterprise IT project management for a global organization: countries → branches → projects → tasks, with RBAC, GRC checkpoints, meeting hub, dashboards, reporting, and audit logging.
 
+## Features
+
+- **Hierarchy & RBAC** — organization → countries → branches → projects; scoped roles
+  (Global Admin, Branch Manager, Project Manager, Viewer) enforced on every endpoint
+- **Projects** — RAG health, lifecycle status, PM + team, budget, GRC checkpoints
+  (governance / risk / compliance gates with review workflow)
+- **Tasks** — assignee, timeline, priority, milestones, estimates, finish-to-start
+  dependencies (cycle-safe), comments, and enforced **blocker explanations** + next steps
+- **Meeting Hub** — agendas auto-built from live project data (RAG, blockers with
+  reasons, next steps, overdue work, open GRC gates), frozen as a permanent record on completion
+- **Dashboards** — global executive and branch-level views; RAG donut, status and
+  country charts, drag-and-drop Kanban, Gantt timeline with milestones and today marker
+- **Monthly Report Generator** — one-click PowerPoint deck (portfolio summary + one slide per project)
+- **Notifications** — blocked tasks, RAG downgrades, approaching deadlines (hourly scanner),
+  assignments, meeting invites, GRC due dates; in-app bell with unread badge
+- **Integrations** — HMAC-signed webhooks with delivery log and retries, CSV/JSON exports,
+  full REST API; ⌘K command palette, My Tasks workload view, admin audit-log viewer
+
 ## Stack
 
 | Layer    | Technology                                      |
@@ -57,4 +75,4 @@ npm run dev            # http://localhost:3000
 - [x] **Phase 2** — CRUD endpoints + UI: Countries, Branches, Users, Projects
 - [x] **Phase 3** — Tasks, blocker mechanics, Meeting Hub
 - [x] **Phase 4** — Dashboards (Gantt, Kanban, status charts), monthly slide report generator
-- [ ] **Phase 5** — Notification engine, webhooks, UI polish
+- [x] **Phase 5** — Notification engine, webhooks, data export, UI polish

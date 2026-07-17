@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { useMe } from '@/components/auth-context';
+import { useFeedback } from '@/components/feedback';
 import { isGlobalAdmin, canManageBranch, type Branch, type Country } from '@/lib/types';
 import {
   PageHeader, Spinner, EmptyState, Button, Modal, Field, Input, Select, ErrorNote,
@@ -12,6 +13,7 @@ const emptyForm = { country_id: '', name: '', code: '', city: '', timezone: 'UTC
 
 export default function BranchesPage() {
   const me = useMe();
+  const { toast, confirm } = useFeedback();
   const admin = isGlobalAdmin(me);
   const [branches, setBranches] = useState<Branch[] | null>(null);
   const [countries, setCountries] = useState<Country[]>([]);
@@ -59,12 +61,19 @@ export default function BranchesPage() {
   }
 
   async function remove(b: Branch) {
-    if (!confirm(`Delete ${b.name}? This removes all its projects.`)) return;
+    const ok = await confirm({
+      title: `Delete ${b.name}?`,
+      body: 'This permanently removes the branch and all of its projects.',
+      confirmLabel: 'Delete branch',
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await api(`/branches/${b.id}`, { method: 'DELETE' });
+      toast('success', `${b.name} deleted`);
       await load();
     } catch (err) {
-      alert(err instanceof ApiError ? err.message : 'Delete failed');
+      toast('error', err instanceof ApiError ? err.message : 'Delete failed');
     }
   }
 

@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { query } from '../db.js';
 import { isGlobalAdmin, scopedBranchIds, canManageBranch, canManageProject, hasBranchRole } from '../lib/rbac.js';
 import { logAudit, diff } from '../lib/audit.js';
+import { notifyUsers, projectStakeholders, isRagDowngrade } from '../lib/notify.js';
+import { emitEvent } from '../lib/webhooks.js';
 
 const router = Router();
 
@@ -94,6 +96,7 @@ router.post('/', async (req, res) => {
       ]
     );
     await logAudit(req, 'create', 'project', rows[0].id, { after: { name, branch_id, project_manager_id } });
+    emitEvent('project.created', { project_id: rows[0].id, name: name.trim(), branch_id });
     res.status(201).json({ project: await fetchProject(rows[0].id) });
   } catch (err) {
     if (err.code === '23503') return res.status(400).json({ error: 'Unknown branch or project manager' });
@@ -144,6 +147,28 @@ router.patch('/:id', async (req, res) => {
   const changes = diff(existing, next);
   if (changes) {
     await logAudit(req, ragChanged || statusChanged ? 'status_change' : 'update', 'project', req.params.id, changes);
+  }
+
+  if (ragChanged) {
+    emitEvent('project.rag_changed', {
+      project_id: req.params.id, name: next.name, from: existing.rag_status, to: next.rag_status,
+    });
+    if (isRagDowngrade(existing.rag_status, next.rag_status)) {
+      await notifyUsers(
+        (await projectStakeholders({ ...existing, project_manager_id: next.project_manager_id }))
+          .filter((id) => id !== req.user.id),
+        'rag_downgrade',
+        `RAG downgraded: ${next.name}`,
+        `${existing.rag_status.toUpperCase()} → ${next.rag_status.toUpperCase()}`,
+        'project',
+        req.params.id
+      );
+    }
+  }
+  if (statusChanged) {
+    emitEvent('project.status_changed', {
+      project_id: req.params.id, name: next.name, from: existing.status, to: next.status,
+    });
   }
   res.json({ project: await fetchProject(req.params.id) });
 });

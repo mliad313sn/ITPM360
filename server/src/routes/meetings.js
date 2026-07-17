@@ -4,6 +4,8 @@ import { isGlobalAdmin, scopedBranchIds } from '../lib/rbac.js';
 import { loadProject, canViewProject, canContribute } from '../lib/access.js';
 import { buildAgenda } from '../lib/agenda.js';
 import { logAudit } from '../lib/audit.js';
+import { notifyUsers } from '../lib/notify.js';
+import { emitEvent } from '../lib/webhooks.js';
 
 const router = Router();
 
@@ -72,6 +74,14 @@ router.post('/projects/:projectId/meetings', async (req, res) => {
     );
   }
   await logAudit(req, 'create', 'meeting', rows[0].id, { after: { title: b.title, project_id: req.params.projectId } });
+  await notifyUsers(
+    attendees.filter((id) => id !== req.user.id),
+    'meeting_scheduled',
+    `Meeting scheduled: ${b.title.trim()}`,
+    `${project.name} — ${new Date(b.scheduled_at).toLocaleString('en', { dateStyle: 'medium', timeStyle: 'short' })}`,
+    'meeting',
+    rows[0].id
+  );
   res.status(201).json({ meeting: await fetchMeeting(rows[0].id) });
 });
 
@@ -142,6 +152,9 @@ router.post('/meetings/:id/complete', async (req, res) => {
   );
   await logAudit(req, 'status_change', 'meeting', req.params.id, {
     before: { status: meeting.status }, after: { status: 'completed' },
+  });
+  emitEvent('meeting.completed', {
+    meeting_id: req.params.id, title: meeting.title, project_id: meeting.project_id, agenda,
   });
   res.json({ meeting: await fetchMeeting(req.params.id), agenda, agenda_frozen: true });
 });

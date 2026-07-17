@@ -70,17 +70,27 @@ export function GanttChart({ tasks }: { tasks: Task[] }) {
         {dated.map((t) => {
           const s = new Date(t.start_date ?? t.due_date!).getTime();
           const e = Math.max(new Date(t.due_date ?? t.start_date!).getTime() + DAY, s + DAY);
+          const tip = `${t.title}: ${t.start_date?.slice(0, 10) ?? '…'} → ${t.due_date?.slice(0, 10) ?? '…'} (${taskStatusLabels[t.status]})`;
           return (
             <div key={t.id} className="flex items-center gap-0 py-1.5">
               <div className="w-56 shrink-0 truncate pr-3 text-sm text-slate-700" title={t.title}>
+                {t.is_milestone && <span className="mr-1 text-indigo-500">◆</span>}
                 {t.title}
               </div>
               <div className="relative h-4 flex-1">
-                <div
-                  className={cx('absolute inset-y-0 rounded-full', BAR_COLORS[t.status])}
-                  style={{ left: `${pct(s)}%`, width: `${Math.max(((e - s) / span) * 100, 0.8)}%` }}
-                  title={`${t.title}: ${t.start_date?.slice(0, 10) ?? '…'} → ${t.due_date?.slice(0, 10) ?? '…'} (${taskStatusLabels[t.status]})`}
-                />
+                {t.is_milestone ? (
+                  <div
+                    className={cx('absolute top-1/2 h-3.5 w-3.5 -translate-y-1/2 rotate-45 rounded-[3px]', BAR_COLORS[t.status])}
+                    style={{ left: `calc(${pct(e)}% - 7px)` }}
+                    title={tip}
+                  />
+                ) : (
+                  <div
+                    className={cx('absolute inset-y-0 rounded-full', BAR_COLORS[t.status])}
+                    style={{ left: `${pct(s)}%`, width: `${Math.max(((e - s) / span) * 100, 0.8)}%` }}
+                    title={tip}
+                  />
+                )}
               </div>
             </div>
           );

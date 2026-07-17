@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api, ApiError } from '@/lib/api';
 import { useMe } from '@/components/auth-context';
+import { useFeedback } from '@/components/feedback';
 import { ProjectFormModal } from '@/components/project-form';
 import { TasksSection } from '@/components/tasks-section';
 import { GrcSection } from '@/components/grc-section';
@@ -28,6 +29,7 @@ export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const me = useMe();
+  const { toast, confirm } = useFeedback();
   const [project, setProject] = useState<Project | null>(null);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [users, setUsers] = useState<UserRow[]>([]);
@@ -100,12 +102,19 @@ export default function ProjectDetailPage() {
   }
 
   async function removeProject() {
-    if (!confirm(`Delete project "${project!.name}"? This cannot be undone.`)) return;
+    const ok = await confirm({
+      title: `Delete "${project!.name}"?`,
+      body: 'All tasks, meetings and checkpoints will be removed. This cannot be undone.',
+      confirmLabel: 'Delete project',
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await api(`/projects/${id}`, { method: 'DELETE' });
+      toast('success', 'Project deleted');
       router.push('/projects');
     } catch (err) {
-      alert(err instanceof ApiError ? err.message : 'Delete failed');
+      toast('error', err instanceof ApiError ? err.message : 'Delete failed');
     }
   }
 

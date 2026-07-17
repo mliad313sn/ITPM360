@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { api, ApiError } from '@/lib/api';
+import { useFeedback } from '@/components/feedback';
 import type { GrcCheckpoint, GrcStatus, GrcType, Project } from '@/lib/types';
 import { Button, Modal, Field, Input, Select, Textarea, ErrorNote, cx, formatDate } from '@/components/ui';
 
@@ -32,6 +33,7 @@ export function GrcSection({
   canManage: boolean;
   onChanged: () => void;
 }) {
+  const { toast } = useFeedback();
   const [editing, setEditing] = useState<GrcCheckpoint | 'new' | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState<string | null>(null);
@@ -81,9 +83,10 @@ export function GrcSection({
   async function setStatus(c: GrcCheckpoint, status: GrcStatus) {
     try {
       await api(`/grc/${c.id}`, { method: 'PATCH', body: JSON.stringify({ status }) });
+      toast('success', `Checkpoint ${status.replace('_', ' ')}`);
       onChanged();
     } catch (err) {
-      alert(err instanceof ApiError ? err.message : 'Update failed');
+      toast('error', err instanceof ApiError ? err.message : 'Update failed');
     }
   }
 

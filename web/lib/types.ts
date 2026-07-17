@@ -79,6 +79,12 @@ export interface Project {
 export type TaskStatus = 'todo' | 'in_progress' | 'blocked' | 'in_review' | 'done';
 export type TaskPriority = 'low' | 'medium' | 'high' | 'critical';
 
+export interface TaskDependency {
+  id: string;
+  title: string;
+  status: TaskStatus;
+}
+
 export interface Task {
   id: string;
   project_id: string;
@@ -94,6 +100,71 @@ export interface Task {
   blocker_explanation: string | null;
   next_steps: string | null;
   sort_order: number;
+  is_milestone: boolean;
+  estimate_hours: string | null;
+  dependencies: TaskDependency[];
+  project_name?: string;
+  branch_code?: string;
+}
+
+export interface TaskComment {
+  id: string;
+  task_id: string;
+  author_name: string | null;
+  body: string;
+  created_at: string;
+}
+
+export interface NotificationRow {
+  id: string;
+  type: string;
+  title: string;
+  body: string | null;
+  entity_type: string | null;
+  entity_id: string | null;
+  is_read: boolean;
+  created_at: string;
+}
+
+export interface Webhook {
+  id: string;
+  url: string;
+  secret: string;
+  events: string[];
+  is_active: boolean;
+  created_by_name: string | null;
+  delivery_count: number;
+  created_at: string;
+}
+
+export interface WebhookDelivery {
+  id: number;
+  subscription_id: string;
+  url: string;
+  event: string;
+  response_status: number | null;
+  attempts: number;
+  delivered_at: string | null;
+  created_at: string;
+}
+
+export interface SearchResult {
+  type: 'project' | 'task' | 'meeting';
+  id: string;
+  name: string;
+  context: string;
+  href: string;
+}
+
+export interface AuditLog {
+  id: number;
+  actor_name: string | null;
+  action: string;
+  entity_type: string;
+  entity_id: string | null;
+  changes: { before?: Record<string, unknown>; after?: Record<string, unknown> } | null;
+  ip_address: string | null;
+  created_at: string;
 }
 
 export type GrcType = 'governance' | 'risk' | 'compliance';

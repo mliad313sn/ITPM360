@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { api, ApiError } from '@/lib/api';
+import { useFeedback } from '@/components/feedback';
 import type { Agenda, Meeting } from '@/lib/types';
 import { Button, RagBadge, Spinner, Textarea, cx, formatDate } from '@/components/ui';
 import { MeetingStatusBadge, formatDateTime } from '@/components/meetings-section';
@@ -11,6 +12,7 @@ import { TaskStatusBadge } from '@/components/task-badges';
 
 export default function MeetingDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const { toast, confirm } = useFeedback();
   const [meeting, setMeeting] = useState<Meeting | null>(null);
   const [agenda, setAgenda] = useState<Agenda | null>(null);
   const [frozen, setFrozen] = useState(false);
@@ -40,7 +42,12 @@ export default function MeetingDetailPage() {
   if (!meeting || !agenda) return <Spinner />;
 
   async function complete() {
-    if (!confirm('Complete this meeting? The agenda will be frozen as the permanent record.')) return;
+    const ok = await confirm({
+      title: 'Complete this meeting?',
+      body: 'The live agenda will be frozen as the permanent record along with the minutes.',
+      confirmLabel: 'Complete meeting',
+    });
+    if (!ok) return;
     setBusy(true);
     try {
       const d = await api<{ meeting: Meeting; agenda: Agenda; agenda_frozen: boolean }>(
@@ -50,8 +57,9 @@ export default function MeetingDetailPage() {
       setMeeting(d.meeting);
       setAgenda(d.agenda);
       setFrozen(d.agenda_frozen);
+      toast('success', 'Meeting completed — agenda archived');
     } catch (err) {
-      alert(err instanceof ApiError ? err.message : 'Failed to complete meeting');
+      toast('error', err instanceof ApiError ? err.message : 'Failed to complete meeting');
     } finally {
       setBusy(false);
     }
@@ -65,6 +73,7 @@ export default function MeetingDetailPage() {
         body: JSON.stringify({ minutes }),
       });
       setMeeting(d.meeting);
+      toast('success', 'Minutes saved');
     } finally {
       setBusy(false);
     }

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { useMe } from '@/components/auth-context';
+import { useFeedback } from '@/components/feedback';
 import { isGlobalAdmin, type Country } from '@/lib/types';
 import {
   PageHeader, Spinner, EmptyState, Button, Modal, Field, Input, ErrorNote, formatDate,
@@ -10,6 +11,7 @@ import {
 
 export default function CountriesPage() {
   const me = useMe();
+  const { toast, confirm } = useFeedback();
   const admin = isGlobalAdmin(me);
   const [countries, setCountries] = useState<Country[] | null>(null);
   const [editing, setEditing] = useState<Country | 'new' | null>(null);
@@ -48,12 +50,19 @@ export default function CountriesPage() {
   }
 
   async function remove(c: Country) {
-    if (!confirm(`Delete ${c.name}? This removes all its branches and projects.`)) return;
+    const ok = await confirm({
+      title: `Delete ${c.name}?`,
+      body: 'This permanently removes the country and all of its branches and projects.',
+      confirmLabel: 'Delete country',
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await api(`/countries/${c.id}`, { method: 'DELETE' });
+      toast('success', `${c.name} deleted`);
       await load();
     } catch (err) {
-      alert(err instanceof ApiError ? err.message : 'Delete failed');
+      toast('error', err instanceof ApiError ? err.message : 'Delete failed');
     }
   }
 

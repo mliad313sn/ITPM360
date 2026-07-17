@@ -13,6 +13,10 @@ import grcRoutes from './routes/grc.js';
 import meetingRoutes from './routes/meetings.js';
 import dashboardRoutes from './routes/dashboard.js';
 import reportRoutes from './routes/reports.js';
+import notificationRoutes from './routes/notifications.js';
+import webhookRoutes from './routes/webhooks.js';
+import exportRoutes from './routes/export.js';
+import workspaceRoutes from './routes/workspace.js';
 
 export function createApp() {
   const app = express();
@@ -39,6 +43,10 @@ export function createApp() {
   app.use('/api', requireAuth, meetingRoutes);
   app.use('/api/dashboard', requireAuth, dashboardRoutes);
   app.use('/api/reports', requireAuth, reportRoutes);
+  app.use('/api/notifications', requireAuth, notificationRoutes);
+  app.use('/api/webhooks', requireAuth, webhookRoutes);
+  app.use('/api/export', requireAuth, exportRoutes);
+  app.use('/api', requireAuth, workspaceRoutes);
 
   app.get('/api/audit-logs', requireAuth, requireGlobalAdmin, async (req, res) => {
     const limit = Math.min(Number(req.query.limit) || 100, 500);

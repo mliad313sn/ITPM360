@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { query } from '../db.js';
 import { loadProject, canViewProject, canContribute } from '../lib/access.js';
 import { logAudit, diff } from '../lib/audit.js';
+import { notifyUsers, projectStakeholders } from '../lib/notify.js';
+import { emitEvent } from '../lib/webhooks.js';
 
 const router = Router();
 
@@ -9,9 +11,39 @@ const STATUSES = ['todo', 'in_progress', 'blocked', 'in_review', 'done'];
 const PRIORITIES = ['low', 'medium', 'high', 'critical'];
 
 const TASK_SELECT = `
-  SELECT t.*, u.full_name AS assignee_name
+  SELECT t.*, u.full_name AS assignee_name,
+         COALESCE((SELECT json_agg(json_build_object('id', d.depends_on_task_id, 'title', dt.title, 'status', dt.status))
+           FROM task_dependencies d JOIN tasks dt ON dt.id = d.depends_on_task_id
+           WHERE d.task_id = t.id), '[]') AS dependencies
   FROM tasks t LEFT JOIN users u ON u.id = t.assignee_id
 `;
+
+async function onTaskBlocked(project, task, actorId) {
+  await notifyUsers(
+    [...(await projectStakeholders(project)), task.assignee_id].filter((id) => id !== actorId),
+    'task_blocked',
+    `Task blocked: ${task.title}`,
+    task.blocker_explanation,
+    'task',
+    task.id
+  );
+  emitEvent('task.blocked', {
+    task_id: task.id, title: task.title, project_id: project.id,
+    blocker_explanation: task.blocker_explanation,
+  });
+}
+
+async function onTaskAssigned(project, task, actorId) {
+  if (task.assignee_id && task.assignee_id !== actorId) {
+    await notifyUsers(
+      [task.assignee_id], 'task_assigned',
+      `You were assigned: ${task.title}`,
+      `Project: ${project.name}`,
+      'task', task.id
+    );
+  }
+  emitEvent('task.assigned', { task_id: task.id, title: task.title, project_id: project.id, assignee_id: task.assignee_id });
+}
 
 // GET /api/projects/:projectId/tasks
 router.get('/projects/:projectId/tasks', async (req, res) => {
@@ -43,10 +75,10 @@ router.post('/projects/:projectId/tasks', async (req, res) => {
     const { rows } = await query(
       `INSERT INTO tasks (project_id, title, description, assignee_id, status, priority,
                           start_date, due_date, blocker_explanation, next_steps, sort_order, created_by,
-                          completed_at)
+                          completed_at, is_milestone, estimate_hours)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
                COALESCE((SELECT max(sort_order) + 1 FROM tasks WHERE project_id = $1), 0),
-               $11, $12)
+               $11, $12, $13, $14)
        RETURNING id`,
       [
         req.params.projectId, b.title.trim(), b.description?.trim() || null, b.assignee_id || null,
@@ -54,10 +86,13 @@ router.post('/projects/:projectId/tasks', async (req, res) => {
         b.start_date || null, b.due_date || null,
         b.blocker_explanation?.trim() || null, b.next_steps?.trim() || null,
         req.user.id, status === 'done' ? new Date() : null,
+        b.is_milestone === true, b.estimate_hours ?? null,
       ]
     );
     await logAudit(req, 'create', 'task', rows[0].id, { after: { title: b.title, project_id: req.params.projectId } });
     const { rows: task } = await query(`${TASK_SELECT} WHERE t.id = $1`, [rows[0].id]);
+    if (task[0].status === 'blocked') await onTaskBlocked(project, task[0], req.user.id);
+    if (task[0].assignee_id) await onTaskAssigned(project, task[0], req.user.id);
     res.status(201).json({ task: task[0] });
   } catch (err) {
     if (err.code === '23503') return res.status(400).json({ error: 'Unknown assignee' });
@@ -88,6 +123,8 @@ router.patch('/tasks/:id', async (req, res) => {
       b.blocker_explanation !== undefined ? b.blocker_explanation?.trim() || null : existing.blocker_explanation,
     next_steps: b.next_steps !== undefined ? b.next_steps?.trim() || null : existing.next_steps,
     sort_order: Number.isInteger(b.sort_order) ? b.sort_order : existing.sort_order,
+    is_milestone: typeof b.is_milestone === 'boolean' ? b.is_milestone : existing.is_milestone,
+    estimate_hours: b.estimate_hours !== undefined ? b.estimate_hours ?? null : existing.estimate_hours,
   };
   if (next.status === 'blocked' && !next.blocker_explanation) {
     return res.status(400).json({ error: 'A blocked task requires a blocker explanation' });
@@ -99,12 +136,12 @@ router.patch('/tasks/:id', async (req, res) => {
     await query(
       `UPDATE tasks SET title=$1, description=$2, assignee_id=$3, status=$4, priority=$5,
               start_date=$6, due_date=$7, blocker_explanation=$8, next_steps=$9, sort_order=$10,
-              completed_at=$11
-       WHERE id = $12`,
+              completed_at=$11, is_milestone=$12, estimate_hours=$13
+       WHERE id = $14`,
       [
         next.title, next.description, next.assignee_id, next.status, next.priority,
         next.start_date, next.due_date, next.blocker_explanation, next.next_steps, next.sort_order,
-        completed_at, req.params.id,
+        completed_at, next.is_milestone, next.estimate_hours, req.params.id,
       ]
     );
   } catch (err) {
@@ -118,6 +155,13 @@ router.patch('/tasks/:id', async (req, res) => {
     await logAudit(req, next.status !== existing.status ? 'status_change' : 'update', 'task', req.params.id, changes);
   }
   const { rows: task } = await query(`${TASK_SELECT} WHERE t.id = $1`, [req.params.id]);
+
+  if (next.status === 'blocked' && existing.status !== 'blocked') {
+    await onTaskBlocked(project, task[0], req.user.id);
+  }
+  if (next.assignee_id && next.assignee_id !== existing.assignee_id) {
+    await onTaskAssigned(project, task[0], req.user.id);
+  }
   res.json({ task: task[0] });
 });
 
