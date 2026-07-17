@@ -243,6 +243,26 @@ test('EVM: project exposes earned-value metrics and portfolio rollup', async () 
   assert.equal(done.body.task.percent_complete, 100);
 });
 
+test('project charter fields persist via PATCH', async () => {
+  const res = await request(app).patch(`/api/projects/${projectId}`).set(auth(pmToken))
+    .send({
+      business_case: 'Reduce run cost',
+      objectives: 'Cut close time',
+      scope_in: 'Finance module',
+      scope_out: 'Hardware',
+      success_criteria: 'Parallel run signed off',
+    });
+  assert.equal(res.status, 200);
+  const detail = await request(app).get(`/api/projects/${projectId}`).set(auth(pmToken));
+  assert.equal(detail.body.project.business_case, 'Reduce run cost');
+  assert.equal(detail.body.project.scope_out, 'Hardware');
+
+  // untouched charter fields survive an unrelated update
+  await request(app).patch(`/api/projects/${projectId}`).set(auth(pmToken)).send({ rag_status: 'amber' });
+  const after = await request(app).get(`/api/projects/${projectId}`).set(auth(pmToken));
+  assert.equal(after.body.project.business_case, 'Reduce run cost');
+});
+
 test('capacity: aggregates remaining workload per assignee and flags over-allocation', async () => {
   // Set the PM's weekly capacity low, then assign an oversized estimated task due this week
   await request(app).patch(`/api/users/${pmId}`).set(auth(adminToken))

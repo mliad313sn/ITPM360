@@ -28,8 +28,26 @@ const BUCKET_TINT: Record<string, string> = {
   'No due date': 'text-slate-400',
 };
 
+// Eisenhower classification from existing data.
+const isImportant = (t: Task) => t.priority === 'critical' || t.priority === 'high';
+function isUrgent(t: Task) {
+  if (!t.due_date) return false;
+  const due = new Date(t.due_date);
+  const soon = new Date(new Date().toDateString());
+  soon.setDate(soon.getDate() + 7);
+  return due <= soon; // due within 7 days or overdue
+}
+
+const QUADRANTS = [
+  { key: 'do', title: 'Do now', sub: 'Important · Urgent', imp: true, urg: true, style: 'border-rose-300 bg-rose-50', head: 'text-rose-700' },
+  { key: 'plan', title: 'Schedule', sub: 'Important · Not urgent', imp: true, urg: false, style: 'border-indigo-300 bg-indigo-50', head: 'text-indigo-700' },
+  { key: 'delegate', title: 'Delegate', sub: 'Not important · Urgent', imp: false, urg: true, style: 'border-amber-300 bg-amber-50', head: 'text-amber-700' },
+  { key: 'drop', title: 'Backlog', sub: 'Not important · Not urgent', imp: false, urg: false, style: 'border-slate-200 bg-slate-50', head: 'text-slate-500' },
+] as const;
+
 export default function MyTasksPage() {
   const [tasks, setTasks] = useState<Task[] | null>(null);
+  const [view, setView] = useState<'list' | 'matrix'>('list');
 
   useEffect(() => {
     api<{ tasks: Task[] }>('/my/tasks').then((d) => setTasks(d.tasks));
@@ -43,12 +61,70 @@ export default function MyTasksPage() {
     buckets.set(b, [...(buckets.get(b) ?? []), t]);
   }
 
+  const views = [
+    { key: 'list', label: 'By urgency' },
+    { key: 'matrix', label: 'Priority matrix' },
+  ] as const;
+
   return (
     <>
-      <PageHeader title="My Tasks" subtitle="Your open work across every project, ordered by urgency" />
+      <PageHeader
+        title="My Tasks"
+        subtitle="Your open work across every project"
+        action={
+          <div className="flex rounded-lg border border-slate-200 p-0.5">
+            {views.map((v) => (
+              <button
+                key={v.key}
+                onClick={() => setView(v.key)}
+                className={cx(
+                  'rounded-md px-3 py-1 text-xs font-medium transition',
+                  view === v.key ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-slate-700'
+                )}
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
+        }
+      />
 
       {tasks.length === 0 ? (
         <EmptyState title="Nothing assigned to you" hint="Tasks assigned to you across all projects appear here." />
+      ) : view === 'matrix' ? (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {QUADRANTS.map((q) => {
+            const items = tasks.filter((t) => isImportant(t) === q.imp && isUrgent(t) === q.urg);
+            return (
+              <div key={q.key} className={cx('rounded-xl border p-4', q.style)}>
+                <div className="mb-3">
+                  <h2 className={cx('text-sm font-semibold uppercase tracking-wide', q.head)}>{q.title}</h2>
+                  <p className="text-xs text-slate-500">{q.sub} · {items.length}</p>
+                </div>
+                <div className="space-y-2">
+                  {items.length === 0 && <p className="text-xs text-slate-400">Nothing here.</p>}
+                  {items.map((t) => (
+                    <Link
+                      key={t.id}
+                      href={`/projects/${t.project_id}`}
+                      className="block rounded-lg border border-slate-200 bg-white px-3 py-2 transition hover:border-indigo-300"
+                    >
+                      <p className="flex items-center gap-1.5 truncate text-sm font-medium text-slate-900">
+                        {t.is_milestone && <span className="text-indigo-500">◆</span>}
+                        {t.title}
+                      </p>
+                      <p className="mt-0.5 flex items-center gap-2 text-xs text-slate-500">
+                        <span className="truncate">{t.project_name}</span>
+                        <PriorityLabel priority={t.priority} />
+                        {t.due_date && <span className="shrink-0">{formatDate(t.due_date)}</span>}
+                      </p>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       ) : (
         <div className="space-y-6">
           {BUCKET_ORDER.filter((b) => buckets.has(b)).map((bucket) => (

@@ -31,7 +31,7 @@ Roles are scoped: `global_admin` (org-wide) or `branch_manager` / `project_manag
 |---|---|---|
 | GET | `/projects` (`?branch_id=&status=&rag=`) | scoped list with members, task/blocked counts |
 | POST | `/projects` | global admin, or BM/PM of the target branch |
-| GET/PATCH/DELETE | `/projects/:id` | manage: admin, branch BM, or assigned PM |
+| GET/PATCH/DELETE | `/projects/:id` | manage: admin, branch BM, or assigned PM. GET returns `evm`. PATCH also accepts charter fields (`objectives`, `scope_in`, `scope_out`, `business_case`, `success_criteria`) and `actual_cost` |
 | POST/DELETE | `/projects/:id/members[/:userId]` | project managers |
 | GET/POST | `/projects/:id/grc` | checkpoints (`governance/risk/compliance`) |
 | PATCH/DELETE | `/grc/:id` | status flow `pending → in_review → approved/rejected/waived` |

@@ -19,6 +19,9 @@ Enterprise IT project management for a global organization: countries → branch
   health dots; multi-dimensional health (on time / on budget / scope)
 - **Resource & capacity** — per-person workload heatmap (remaining hours by due-week
   vs weekly availability) with over-allocation detection and editable capacities
+- **Project charter** — business case, objectives, in/out scope and success criteria
+  per project; **Eisenhower priority matrix** (Do now / Schedule / Delegate / Backlog)
+  on the personal task view
 - **Meeting Hub** — agendas auto-built from live project data (RAG, blockers with
   reasons, next steps, overdue work, open GRC gates), frozen as a permanent record on completion
 - **Dashboards** — global executive and branch-level views; RAG donut, status and

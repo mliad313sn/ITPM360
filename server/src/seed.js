@@ -163,6 +163,21 @@ async function seed() {
     );
   }
 
+  // Project charter for the flagship demo project
+  await query(
+    `UPDATE projects SET
+       business_case = $2, objectives = $3, scope_in = $4, scope_out = $5, success_criteria = $6
+     WHERE id = $1`,
+    [
+      projects['ERP Cloud Migration'],
+      'The on-premise ERP is out of vendor support in 2027 and blocks month-end automation. Migrating to a managed cloud platform cuts run costs ~30% and unblocks real-time reporting.',
+      'Zero data loss at cutover; reduce month-end close from 6 to 3 days; decommission two on-prem data centres.',
+      'Finance, procurement and HR modules; data migration and reconciliation; integration with the identity platform.',
+      'Custom warehouse-management add-ons (handled by a separate project); end-user hardware refresh.',
+      'Signed-off parallel run over one full close cycle; <0.01% reconciliation variance; steering-committee go-live approval.',
+    ]
+  );
+
   // Capacity variety (part-timers + a stretched PM) for the workload heatmap
   await query(`UPDATE users SET weekly_capacity_hours = 32 WHERE email = 'dana.kim@itpm360.dev'`);
   await query(`UPDATE users SET weekly_capacity_hours = 20 WHERE email = 'lena.mueller@itpm360.dev'`);

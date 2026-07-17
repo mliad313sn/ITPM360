@@ -12,6 +12,7 @@ import { GrcSection } from '@/components/grc-section';
 import { RisksSection } from '@/components/risks-section';
 import { MeetingsSection } from '@/components/meetings-section';
 import { EvmPanel } from '@/components/evm';
+import { CharterSection } from '@/components/charter-section';
 import {
   canManageBranch, canManageProject,
   type Branch, type Evm, type GrcCheckpoint, type Meeting, type Project, type Rag, type Risk, type Task, type UserRow,
@@ -166,6 +167,8 @@ export default function ProjectDetailPage() {
               {project.description ?? 'No description provided.'}
             </p>
           </section>
+
+          <CharterSection project={project} canManage={canManage} onSaved={setProject} />
 
           <section className="rounded-xl border border-slate-200 bg-white p-5">
             <div className="mb-3 flex items-center justify-between">

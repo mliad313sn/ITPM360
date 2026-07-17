@@ -132,14 +132,22 @@ router.patch('/:id', async (req, res) => {
     actual_cost: body.actual_cost !== undefined ? body.actual_cost ?? null : existing.actual_cost,
   };
 
+  // Charter fields (optional; only overwritten when present in the body)
+  const charterCols = ['objectives', 'scope_in', 'scope_out', 'business_case', 'success_criteria'];
+  for (const col of charterCols) {
+    next[col] = body[col] !== undefined ? body[col]?.trim() || null : existing[col];
+  }
+
   try {
     await query(
       `UPDATE projects SET name = $1, description = $2, project_manager_id = $3, rag_status = $4,
-              status = $5, start_date = $6, end_date = $7, budget = $8, actual_cost = $9
-       WHERE id = $10`,
+              status = $5, start_date = $6, end_date = $7, budget = $8, actual_cost = $9,
+              objectives = $10, scope_in = $11, scope_out = $12, business_case = $13, success_criteria = $14
+       WHERE id = $15`,
       [
         next.name, next.description, next.project_manager_id, next.rag_status,
-        next.status, next.start_date, next.end_date, next.budget, next.actual_cost, req.params.id,
+        next.status, next.start_date, next.end_date, next.budget, next.actual_cost,
+        next.objectives, next.scope_in, next.scope_out, next.business_case, next.success_criteria, req.params.id,
       ]
     );
   } catch (err) {

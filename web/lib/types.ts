@@ -71,6 +71,11 @@ export interface Project {
   budget: string | null;
   actual_cost: string | null;
   progress: number;
+  objectives: string | null;
+  scope_in: string | null;
+  scope_out: string | null;
+  business_case: string | null;
+  success_criteria: string | null;
   task_count: number;
   blocked_count: number;
   members: ProjectMember[];
