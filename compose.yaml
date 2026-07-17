@@ -1,0 +1,40 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: itpm360
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: ./server
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db:5432/itpm360
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env or the environment}
+      CORS_ORIGIN: http://localhost:3000
+      PORT: 4000
+    ports:
+      - '4000:4000'
+    depends_on:
+      db:
+        condition: service_healthy
+    command: sh -c "node src/migrate.js && node src/index.js"
+
+  web:
+    build: ./web
+    environment:
+      API_URL: http://api:4000
+    ports:
+      - '3000:3000'
+    depends_on:
+      - api
+
+volumes:
+  pgdata:

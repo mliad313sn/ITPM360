@@ -40,13 +40,23 @@ docs/SCHEMA.md    Database schema documentation (ERD + rationale)
 
 ## Getting started
 
-### 1. Database
+### Option A — Docker Compose
+
+```bash
+JWT_SECRET=$(openssl rand -hex 32) docker compose up --build
+# web on :3000, API on :4000 — then seed demo data:
+docker compose exec api node src/seed.js
+```
+
+### Option B — local
+
+#### 1. Database
 
 ```bash
 createdb itpm360
 ```
 
-### 2. Backend
+#### 2. Backend
 
 ```bash
 cd server
@@ -61,13 +71,37 @@ Seeded logins: `admin@itpm360.dev` (Global Admin), `lena.mueller@itpm360.dev` (B
 Manager DE-BER), `raj.patel@itpm360.dev` (PM DE-BER/DE-MUC), `sofia.garcia@itpm360.dev`
 (PM US-NYC), `wei.tan@itpm360.dev` (BM+PM SG-SIN), `dana.kim@itpm360.dev` (Viewer).
 
-### 3. Frontend
+#### 3. Frontend
 
 ```bash
 cd web
 npm install
 npm run dev            # http://localhost:3000
 ```
+
+## Testing & CI
+
+```bash
+cd server
+npm test               # integration suite against postgres (itpm360_test)
+```
+
+The suite covers auth, RBAC scoping, the blocked-task rule, meeting agenda
+freezing, dependency cycle rejection, notifications, audit logging, CSV export
+and login rate limiting. GitHub Actions (`.github/workflows/ci.yml`) runs it
+against a PostgreSQL 16 service plus the frontend production build on every PR.
+
+## Security notes
+
+- JWT auth (12h expiry), bcrypt password hashing, scoped RBAC on every route
+- `helmet` security headers, CORS allow-list, 1 MB JSON body limit,
+  login rate limiting (20 attempts / 15 min / IP)
+- Production refuses to boot without a strong `JWT_SECRET` and `DATABASE_URL`
+- Append-only audit log (actor, action, before/after diff, IP) incl. logins and exports
+- Webhook payloads signed with HMAC-SHA256; graceful shutdown on SIGTERM
+
+See [`docs/API.md`](docs/API.md) for the endpoint reference and
+[`docs/SCHEMA.md`](docs/SCHEMA.md) for the data model.
 
 ## Development phases
 

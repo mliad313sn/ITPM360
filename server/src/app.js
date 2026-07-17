@@ -1,5 +1,7 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import { pool, query } from './db.js';
 import { requireAuth } from './middleware/auth.js';
 import { requireGlobalAdmin } from './lib/rbac.js';
@@ -21,8 +23,22 @@ import workspaceRoutes from './routes/workspace.js';
 export function createApp() {
   const app = express();
 
+  app.set('trust proxy', 1); // accurate req.ip behind the reverse proxy
+  app.disable('x-powered-by');
+
+  app.use(helmet());
   app.use(cors({ origin: process.env.CORS_ORIGIN?.split(',') ?? true }));
-  app.use(express.json());
+  app.use(express.json({ limit: '1mb' }));
+
+  // Brute-force protection on credential endpoints
+  const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 20,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    message: { error: 'Too many login attempts — try again later' },
+  });
+  app.use('/api/auth/login', loginLimiter);
 
   app.get('/api/health', async (_req, res) => {
     try {
@@ -61,9 +77,13 @@ export function createApp() {
 
   app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
 
+  // Express 5 forwards rejected async handlers here automatically
   // eslint-disable-next-line no-unused-vars
-  app.use((err, _req, res, _next) => {
-    console.error(err);
+  app.use((err, req, res, _next) => {
+    if (err?.type === 'entity.parse.failed' || err?.type === 'entity.too.large') {
+      return res.status(400).json({ error: 'Invalid request body' });
+    }
+    console.error(`${req.method} ${req.originalUrl}:`, err);
     res.status(500).json({ error: 'Internal server error' });
   });
 
