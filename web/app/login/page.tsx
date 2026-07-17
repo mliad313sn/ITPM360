@@ -10,6 +10,8 @@ export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [totp, setTotp] = useState('');
+  const [needsTotp, setNeedsTotp] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -20,12 +22,17 @@ export default function LoginPage() {
     try {
       const { token } = await api<{ token: string; user: Me }>('/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, totp: totp || undefined }),
       });
       setToken(token);
       router.push('/dashboard');
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Login failed');
+      if (err instanceof ApiError && err.data.twofa_required) {
+        setNeedsTotp(true);
+        setError(totp ? 'Invalid authenticator code' : null);
+      } else {
+        setError(err instanceof ApiError ? err.message : 'Login failed');
+      }
       setBusy(false);
     }
   }
@@ -60,9 +67,22 @@ export default function LoginPage() {
               required
             />
           </Field>
+          {needsTotp && (
+            <Field label="Authenticator code" hint="6-digit code from your authenticator app">
+              <Input
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={6}
+                value={totp}
+                onChange={(e) => setTotp(e.target.value.replace(/\D/g, ''))}
+                placeholder="123456"
+                autoFocus
+              />
+            </Field>
+          )}
           <ErrorNote message={error} />
           <Button type="submit" disabled={busy} className="w-full">
-            {busy ? 'Signing in…' : 'Sign in'}
+            {busy ? 'Signing in…' : needsTotp ? 'Verify & sign in' : 'Sign in'}
           </Button>
         </form>
         <p className="mt-4 text-center text-xs text-slate-400">

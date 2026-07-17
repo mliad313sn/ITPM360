@@ -183,15 +183,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   <p className="truncate text-xs text-slate-400">{primaryRole}</p>
                 </div>
               </div>
-              <button
-                onClick={() => {
-                  clearToken();
-                  router.replace('/login');
-                }}
-                className="mt-2 text-xs font-medium text-slate-400 transition hover:text-white"
-              >
-                Sign out
-              </button>
+              <div className="mt-2 flex gap-3">
+                <Link href="/security" className="text-xs font-medium text-slate-400 transition hover:text-white">
+                  Security
+                </Link>
+                <button
+                  onClick={() => {
+                    clearToken();
+                    router.replace('/login');
+                  }}
+                  className="text-xs font-medium text-slate-400 transition hover:text-white"
+                >
+                  Sign out
+                </button>
+              </div>
             </div>
           </aside>
 

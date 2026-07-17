@@ -7,8 +7,14 @@ Base URL: `http://localhost:4000/api`. All endpoints except `POST /auth/login` a
 
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/auth/login` | `{email, password}` → `{token, user}`. Rate-limited (20 / 15 min / IP). |
-| GET | `/auth/me` | Current user with role assignments. |
+| POST | `/auth/login` | `{email, password, totp?}` → `{token, user}`. Rate-limited (20 / 15 min / IP). If the user has 2FA enabled, a missing/invalid `totp` returns 401 with `{twofa_required:true}`. |
+| GET | `/auth/me` | Current user with role assignments and `totp_enabled`. |
+| POST | `/auth/2fa/setup` | Generate a TOTP secret → `{secret, otpauth_url}` (not yet enabled). |
+| POST | `/auth/2fa/enable` | `{code}` — confirm a code to enable 2FA. |
+| POST | `/auth/2fa/disable` | `{password}` — disable 2FA. |
+
+Notifications are also mirrored to **email** via a pluggable transport (SMTP when
+`SMTP_URL` is set; otherwise captured in memory for dev/test).
 
 Roles are scoped: `global_admin` (org-wide) or `branch_manager` / `project_manager` /
 `viewer` (per branch). Every list endpoint returns only what the caller may see.

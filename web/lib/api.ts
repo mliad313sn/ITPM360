@@ -2,9 +2,11 @@ const TOKEN_KEY = 'itpm360_token';
 
 export class ApiError extends Error {
   status: number;
-  constructor(message: string, status: number) {
+  data: Record<string, unknown>;
+  constructor(message: string, status: number, data: Record<string, unknown> = {}) {
     super(message);
     this.status = status;
+    this.data = data;
   }
 }
 
@@ -30,7 +32,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
       clearToken();
       window.location.href = '/login';
     }
-    throw new ApiError(data.error ?? `Request failed (${res.status})`, res.status);
+    throw new ApiError(data.error ?? `Request failed (${res.status})`, res.status, data);
   }
   return data as T;
 }

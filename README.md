@@ -28,7 +28,10 @@ Enterprise IT project management for a global organization: countries → branch
   country charts, drag-and-drop Kanban, Gantt timeline with milestones and today marker
 - **Monthly Report Generator** — one-click PowerPoint deck (portfolio summary + one slide per project)
 - **Notifications** — blocked tasks, RAG downgrades, approaching deadlines (hourly scanner),
-  assignments, meeting invites, GRC due dates; in-app bell with unread badge
+  assignments, meeting invites, GRC due dates; in-app bell with unread badge, mirrored
+  to email (SMTP when configured)
+- **Security** — optional TOTP two-factor authentication (enrol via authenticator app,
+  enforced at login)
 - **Integrations** — HMAC-signed webhooks with delivery log and retries, CSV/JSON exports,
   full REST API; ⌘K command palette, My Tasks workload view, admin audit-log viewer
 

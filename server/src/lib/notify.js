@@ -1,6 +1,8 @@
 import { query } from '../db.js';
+import { sendEmail } from './email.js';
 
-// Insert in-app notifications for a set of users (deduplicated).
+// Insert in-app notifications for a set of users (deduplicated) and mirror them
+// to email via the configured transport (fire-and-forget).
 export async function notifyUsers(userIds, type, title, body, entityType = null, entityId = null) {
   const unique = [...new Set(userIds)].filter(Boolean);
   for (const userId of unique) {
@@ -9,6 +11,12 @@ export async function notifyUsers(userIds, type, title, body, entityType = null,
        VALUES ($1, $2, $3, $4, $5, $6)`,
       [userId, type, title, body, entityType, entityId]
     );
+  }
+  if (unique.length) {
+    const { rows } = await query('SELECT email FROM users WHERE id = ANY($1) AND is_active', [unique]);
+    for (const { email } of rows) {
+      sendEmail({ to: email, subject: `[ITPM360] ${title}`, text: body ?? title }).catch(() => {});
+    }
   }
   return unique.length;
 }

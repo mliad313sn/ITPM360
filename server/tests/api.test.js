@@ -385,6 +385,48 @@ test('CSV export streams scoped data with headers', async () => {
   assert.match(firstRow, /Test Rollout/);
 });
 
+test('2FA: enable requires a valid code, then login demands the second factor', async () => {
+  const { totp } = await import('../src/lib/totp.js');
+  // fresh user to avoid disturbing other tests / the rate limiter
+  const u = await request(app).post('/api/users').set(auth(adminToken))
+    .send({ email: 'tfa@test.dev', full_name: 'Tee Fa', password: 'TestPassword1!' });
+  const tfaToken = await login('tfa@test.dev', 'TestPassword1!');
+
+  const setup = await request(app).post('/api/auth/2fa/setup').set(auth(tfaToken));
+  assert.equal(setup.status, 200);
+  assert.match(setup.body.otpauth_url, /^otpauth:\/\/totp\//);
+
+  // wrong code rejected
+  const bad = await request(app).post('/api/auth/2fa/enable').set(auth(tfaToken)).send({ code: '000000' });
+  assert.equal(bad.status, 400);
+
+  // correct code enables
+  const ok = await request(app).post('/api/auth/2fa/enable').set(auth(tfaToken))
+    .send({ code: totp(setup.body.secret) });
+  assert.equal(ok.status, 200);
+
+  // login without code is challenged
+  const challenge = await request(app).post('/api/auth/login').send({ email: 'tfa@test.dev', password: 'TestPassword1!' });
+  assert.equal(challenge.status, 401);
+  assert.equal(challenge.body.twofa_required, true);
+
+  // login with a valid code succeeds
+  const done = await request(app).post('/api/auth/login')
+    .send({ email: 'tfa@test.dev', password: 'TestPassword1!', totp: totp(setup.body.secret) });
+  assert.equal(done.status, 200);
+  assert.ok(done.body.token);
+});
+
+test('notifications mirror to the email transport', async () => {
+  const { sentEmails } = await import('../src/lib/email.js');
+  const before = sentEmails.length;
+  // admin assigns a task to the PM → the assignee is notified (and emailed)
+  await request(app).post(`/api/projects/${projectId}/tasks`).set(auth(adminToken))
+    .send({ title: 'Email trigger task', assignee_id: pmId });
+  assert.ok(sentEmails.length > before, 'an email was captured for the notification');
+  assert.match(sentEmails[sentEmails.length - 1].subject, /ITPM360/);
+});
+
 test('login is rate limited', async () => {
   let limited = false;
   for (let i = 0; i < 25; i++) {
