@@ -6,8 +6,12 @@ import Link from 'next/link';
 import { api, ApiError } from '@/lib/api';
 import { useMe } from '@/components/auth-context';
 import { ProjectFormModal } from '@/components/project-form';
+import { TasksSection } from '@/components/tasks-section';
+import { GrcSection } from '@/components/grc-section';
+import { MeetingsSection } from '@/components/meetings-section';
 import {
-  canManageBranch, canManageProject, type Branch, type Project, type Rag, type UserRow,
+  canManageBranch, canManageProject,
+  type Branch, type GrcCheckpoint, type Meeting, type Project, type Rag, type Task, type UserRow,
 } from '@/lib/types';
 import {
   Button, Field, Modal, RagBadge, Select, Input, Spinner, StatusBadge, ErrorNote,
@@ -27,18 +31,30 @@ export default function ProjectDetailPage() {
   const [project, setProject] = useState<Project | null>(null);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [users, setUsers] = useState<UserRow[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [checkpoints, setCheckpoints] = useState<GrcCheckpoint[]>([]);
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [editing, setEditing] = useState(false);
   const [addingMember, setAddingMember] = useState(false);
   const [memberForm, setMemberForm] = useState({ user_id: '', member_role: 'member' });
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
 
+  const loadWork = () => {
+    api<{ tasks: Task[] }>(`/projects/${id}/tasks`).then((d) => setTasks(d.tasks));
+    api<{ checkpoints: GrcCheckpoint[] }>(`/projects/${id}/grc`).then((d) => setCheckpoints(d.checkpoints));
+    api<{ meetings: Meeting[] }>(`/meetings?project_id=${id}`).then((d) => setMeetings(d.meetings));
+  };
+
+  const reloadProject = () =>
+    api<{ project: Project }>(`/projects/${id}`).then((d) => setProject(d.project));
+
   useEffect(() => {
-    api<{ project: Project }>(`/projects/${id}`)
-      .then((d) => setProject(d.project))
-      .catch(() => setNotFound(true));
+    reloadProject().catch(() => setNotFound(true));
     api<{ branches: Branch[] }>('/branches').then((d) => setBranches(d.branches));
     api<{ users: UserRow[] }>('/users').then((d) => setUsers(d.users));
+    loadWork();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   if (notFound) {
@@ -52,6 +68,7 @@ export default function ProjectDetailPage() {
   if (!project) return <Spinner />;
 
   const canManage = canManageProject(me, project);
+  const canContribute = canManage || project.members.some((m) => m.user_id === me?.id);
 
   async function setRag(rag: Rag) {
     if (!canManage || rag === project!.rag_status) return;
@@ -177,9 +194,20 @@ export default function ProjectDetailPage() {
             </ul>
           </section>
 
-          <section className="rounded-xl border border-dashed border-slate-300 bg-white p-5 text-sm text-slate-400">
-            Tasks, GRC checkpoints and the Meeting Hub land here in Phase 3.
-          </section>
+          <TasksSection
+            project={project}
+            tasks={tasks}
+            users={users}
+            canEdit={canContribute}
+            onChanged={() => {
+              loadWork();
+              reloadProject();
+            }}
+          />
+
+          <GrcSection project={project} checkpoints={checkpoints} canManage={canManage} onChanged={loadWork} />
+
+          <MeetingsSection project={project} meetings={meetings} users={users} canEdit={canContribute} onChanged={loadWork} />
         </div>
 
         <div className="space-y-6">

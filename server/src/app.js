@@ -8,6 +8,9 @@ import countryRoutes from './routes/countries.js';
 import branchRoutes from './routes/branches.js';
 import userRoutes from './routes/users.js';
 import projectRoutes from './routes/projects.js';
+import taskRoutes from './routes/tasks.js';
+import grcRoutes from './routes/grc.js';
+import meetingRoutes from './routes/meetings.js';
 
 export function createApp() {
   const app = express();
@@ -29,6 +32,9 @@ export function createApp() {
   app.use('/api/branches', requireAuth, branchRoutes);
   app.use('/api/users', requireAuth, userRoutes);
   app.use('/api/projects', requireAuth, projectRoutes);
+  app.use('/api', requireAuth, taskRoutes);
+  app.use('/api', requireAuth, grcRoutes);
+  app.use('/api', requireAuth, meetingRoutes);
 
   app.get('/api/audit-logs', requireAuth, requireGlobalAdmin, async (req, res) => {
     const limit = Math.min(Number(req.query.limit) || 100, 500);

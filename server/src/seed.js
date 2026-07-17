@@ -101,6 +101,7 @@ async function seed() {
     },
   ];
 
+  const projects = {};
   for (const p of projectDefs) {
     const { rows } = await query(
       `INSERT INTO projects (branch_id, name, description, project_manager_id, rag_status, status,
@@ -109,10 +110,99 @@ async function seed() {
       [branches[p.branch], p.name, p.desc, users[p.pm], p.rag, p.status, p.start, p.end, p.budget,
        users['admin@itpm360.dev']]
     );
+    projects[p.name] = rows[0].id;
     for (const [email, role] of p.members) {
       await query(`INSERT INTO project_members (project_id, user_id, member_role) VALUES ($1, $2, $3)`, [
         rows[0].id, users[email], role,
       ]);
+    }
+  }
+
+  // Tasks — includes blocked tasks with explanations and next steps for the Meeting Hub
+  const taskDefs = [
+    { project: 'ERP Cloud Migration', title: 'Data model mapping legacy → cloud', assignee: 'dana.kim@itpm360.dev',
+      status: 'done', priority: 'high', start: '2026-03-05', due: '2026-04-30',
+      next: null, blocker: null },
+    { project: 'ERP Cloud Migration', title: 'Finance module pilot migration', assignee: 'raj.patel@itpm360.dev',
+      status: 'in_progress', priority: 'critical', start: '2026-05-01', due: '2026-08-15',
+      next: 'Complete dry-run with Q2 close data, then sign-off workshop with finance leads.', blocker: null },
+    { project: 'ERP Cloud Migration', title: 'Vendor contract renewal for middleware', assignee: 'lena.mueller@itpm360.dev',
+      status: 'blocked', priority: 'high', start: '2026-06-01', due: '2026-07-10',
+      next: 'Escalate to procurement director; prepare fallback licensing option.',
+      blocker: 'Procurement freeze: legal review of the new vendor MSA has been pending for 3 weeks.' },
+    { project: 'ERP Cloud Migration', title: 'Cutover runbook and rollback plan', assignee: 'raj.patel@itpm360.dev',
+      status: 'todo', priority: 'medium', start: '2026-08-01', due: '2026-10-01',
+      next: null, blocker: null },
+    { project: 'Zero-Trust Network Rollout', title: 'Identity provider consolidation', assignee: 'raj.patel@itpm360.dev',
+      status: 'blocked', priority: 'critical', start: '2026-02-01', due: '2026-06-30',
+      next: 'Decision meeting with security board needed on tenant topology.',
+      blocker: 'Two conflicting AD forests discovered; merging requires an approved downtime window.' },
+    { project: 'Zero-Trust Network Rollout', title: 'Network micro-segmentation pilot (floor 3)', assignee: 'dana.kim@itpm360.dev',
+      status: 'in_review', priority: 'high', start: '2026-04-01', due: '2026-07-20',
+      next: 'Review pilot metrics, then extend policy set to floors 4-6.', blocker: null },
+    { project: 'Data Warehouse Consolidation', title: 'Schema harmonization for sales data', assignee: 'sofia.garcia@itpm360.dev',
+      status: 'in_progress', priority: 'high', start: '2026-03-01', due: '2026-08-31',
+      next: 'Finish region EU mapping; validate row counts against source.', blocker: null },
+    { project: 'Data Warehouse Consolidation', title: 'Decommission legacy Oracle warehouse', assignee: null,
+      status: 'todo', priority: 'low', start: '2026-09-01', due: '2026-12-01',
+      next: null, blocker: null },
+    { project: 'APAC Disaster Recovery Upgrade', title: 'DR site network provisioning', assignee: 'wei.tan@itpm360.dev',
+      status: 'blocked', priority: 'high', start: '2026-04-15', due: '2026-06-15',
+      next: 'Await budget release confirmation from regional CFO.',
+      blocker: 'Project on hold: capex budget for the secondary data centre frozen until Q3 review.' },
+  ];
+  for (const [i, t] of taskDefs.entries()) {
+    await query(
+      `INSERT INTO tasks (project_id, title, assignee_id, status, priority, start_date, due_date,
+                          blocker_explanation, next_steps, sort_order, created_by, completed_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, CASE WHEN $4 = 'done'::task_status THEN now() END)`,
+      [projects[t.project], t.title, t.assignee ? users[t.assignee] : null, t.status, t.priority,
+       t.start, t.due, t.blocker, t.next, i, users['admin@itpm360.dev']]
+    );
+  }
+
+  // GRC checkpoints
+  const grcDefs = [
+    { project: 'ERP Cloud Migration', type: 'compliance', title: 'GDPR data-transfer impact assessment',
+      status: 'approved', due: '2026-04-15' },
+    { project: 'ERP Cloud Migration', type: 'governance', title: 'Architecture review board sign-off',
+      status: 'in_review', due: '2026-08-01' },
+    { project: 'ERP Cloud Migration', type: 'risk', title: 'Cutover risk assessment & rollback drill',
+      status: 'pending', due: '2026-09-15' },
+    { project: 'Zero-Trust Network Rollout', type: 'risk', title: 'Downtime-window risk sign-off',
+      status: 'pending', due: '2026-07-30' },
+    { project: 'Data Warehouse Consolidation', type: 'compliance', title: 'SOX data-lineage evidence pack',
+      status: 'in_review', due: '2026-08-20' },
+  ];
+  for (const g of grcDefs) {
+    await query(
+      `INSERT INTO grc_checkpoints (project_id, checkpoint_type, title, status, due_date,
+                                    reviewed_by, reviewed_at)
+       VALUES ($1,$2,$3,$4,$5,
+               CASE WHEN $4 = ANY(ARRAY['approved','rejected','waived']::grc_status[]) THEN $6::uuid END,
+               CASE WHEN $4 = ANY(ARRAY['approved','rejected','waived']::grc_status[]) THEN now() END)`,
+      [projects[g.project], g.type, g.title, g.status, g.due, users['admin@itpm360.dev']]
+    );
+  }
+
+  // Meetings — one upcoming steering meeting per active project
+  const meetingDefs = [
+    { project: 'ERP Cloud Migration', title: 'Monthly steering committee', inDays: 3,
+      attendees: ['raj.patel@itpm360.dev', 'lena.mueller@itpm360.dev', 'dana.kim@itpm360.dev'] },
+    { project: 'Zero-Trust Network Rollout', title: 'Blocker escalation sync', inDays: 1,
+      attendees: ['raj.patel@itpm360.dev', 'lena.mueller@itpm360.dev'] },
+    { project: 'Data Warehouse Consolidation', title: 'Sprint review & stakeholder update', inDays: 5,
+      attendees: ['sofia.garcia@itpm360.dev', 'dana.kim@itpm360.dev'] },
+  ];
+  for (const m of meetingDefs) {
+    const { rows } = await query(
+      `INSERT INTO meetings (project_id, title, scheduled_at, duration_minutes, meeting_link, created_by)
+       VALUES ($1, $2, now() + ($3 || ' days')::interval, 45, 'https://meet.example.com/itpm360', $4)
+       RETURNING id`,
+      [projects[m.project], m.title, m.inDays, users['admin@itpm360.dev']]
+    );
+    for (const email of m.attendees) {
+      await query(`INSERT INTO meeting_attendees (meeting_id, user_id) VALUES ($1, $2)`, [rows[0].id, users[email]]);
     }
   }
 

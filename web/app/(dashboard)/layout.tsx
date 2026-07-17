@@ -24,11 +24,18 @@ const icons = {
       <path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M21.5 20a6.5 6.5 0 0 0-4.5-6.2" />
     </>
   ),
+  meetings: (
+    <>
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <path d="M8 3v4M16 3v4M3 10h18" />
+    </>
+  ),
 };
 
 const nav = [
   { href: '/dashboard', label: 'Dashboard', icon: icons.dashboard },
   { href: '/projects', label: 'Projects', icon: icons.projects },
+  { href: '/meetings', label: 'Meetings', icon: icons.meetings },
   { href: '/countries', label: 'Countries', icon: icons.countries },
   { href: '/branches', label: 'Branches', icon: icons.branches },
   { href: '/users', label: 'Users', icon: icons.users },
